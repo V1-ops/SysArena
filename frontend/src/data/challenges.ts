@@ -38,16 +38,16 @@ export const challenges: Challenge[] = [
   },
   {
     id: "university-rag-001",
-    title: "Build a RAG assistant for Business Basics",
+    title: "Build a RAG assistant for a university handbook",
     category: "RAG",
     difficulty: "Easy",
     rewardXp: 120,
-    estimatedTime: "8 min",
+    estimatedTime: "6 min",
     summary:
-      "Assemble a PDF-based RAG pipeline for business basics using recursive chunking, Gemini embeddings, FAISS retrieval, reranking, and structured generation.",
-    objectives: ["Load the PDF", "Index embeddings in FAISS", "Retrieve and rerank relevant chunks"],
-    supportedComponents: ["PDF Loader", "Recursive Text Splitting", "Embeddings", "FAISS Vector Store", "Dense Retriever", "Reranker", "Prompt Template", "LLM"],
-    hint: "Recursive splitting plus dense retrieval is the foundation of this business RAG flow.",
+      "Assemble a retrieval pipeline that can answer policy questions from documents with high accuracy.",
+    objectives: ["Load documents", "Index embeddings", "Retrieve relevant chunks"],
+    supportedComponents: ["PDF Loader", "Chunking", "Embeddings", "Vector DB", "Retriever", "LLM"],
+    hint: "Without embeddings, your retriever has nothing meaningful to search.",
   },
   {
     id: "agent-coder-001",
