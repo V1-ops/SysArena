@@ -1,0 +1,106 @@
+import type { GameModeConfig } from "../types/config.types";
+
+export const agentBuilderConfig: GameModeConfig = {
+  id: "agent-builder",
+  label: "Agent Workflow Builder",
+  theme: {
+    background: "#0B0C10",
+    gridColor: "#1F2833",
+    nodeColors: {
+      planning: "#66FCF1",
+      execution: "#45A29E",
+      verification: "#C5C6C7",
+      delivery: "#66FCF1",
+    },
+    accent: "#66FCF1",
+    textPrimary: "#FFFFFF",
+    textSecondary: "#C5C6C7",
+    borderRadius: "8px",
+    edgeColor: "#45A29E",
+    edgeAnimatedColor: "#66FCF1",
+  },
+  nodeRegistry: [
+    {
+      id: "planner",
+      label: "Planner",
+      category: "planning",
+      description: "Breaks a mission into ordered execution steps.",
+      icon: "ListChecks",
+      inputs: [],
+      outputs: [{ id: "plan", label: "Plan", dataType: "plan" }],
+      configFields: [
+        { name: "depth", label: "Planning Depth", type: "select", options: ["fast", "balanced", "deep"], default: "balanced" },
+      ],
+    },
+    {
+      id: "researcher",
+      label: "Researcher",
+      category: "execution",
+      description: "Gathers source context for implementation choices.",
+      icon: "Search",
+      inputs: [{ id: "plan", label: "Plan", dataType: "plan" }],
+      outputs: [{ id: "findings", label: "Findings", dataType: "findings" }],
+      configFields: [
+        { name: "maxSources", label: "Max Sources", type: "number", min: 1, max: 10, step: 1, default: 4 },
+      ],
+    },
+    {
+      id: "coder",
+      label: "Coder",
+      category: "execution",
+      description: "Turns plan and findings into working changes.",
+      icon: "Code2",
+      inputs: [{ id: "findings", label: "Findings", dataType: "findings" }],
+      outputs: [{ id: "patch", label: "Patch", dataType: "patch" }],
+      configFields: [
+        { name: "scope", label: "Scope", type: "select", options: ["minimal", "standard", "broad"], default: "standard" },
+      ],
+    },
+    {
+      id: "tester",
+      label: "Tester",
+      category: "verification",
+      description: "Runs checks against the produced patch.",
+      icon: "ShieldCheck",
+      inputs: [{ id: "patch", label: "Patch", dataType: "patch" }],
+      outputs: [{ id: "testReport", label: "Test Report", dataType: "test-report" }],
+      configFields: [
+        { name: "strict", label: "Strict Mode", type: "toggle", default: true },
+      ],
+    },
+    {
+      id: "reviewer",
+      label: "Reviewer",
+      category: "delivery",
+      description: "Reviews implementation quality before delivery.",
+      icon: "BadgeCheck",
+      inputs: [{ id: "testReport", label: "Test Report", dataType: "test-report" }],
+      outputs: [{ id: "answer", label: "Answer", dataType: "answer" }],
+      configFields: [
+        { name: "tone", label: "Delivery Tone", type: "select", options: ["concise", "explanatory"], default: "concise" },
+      ],
+    },
+  ],
+  connectionRules: {
+    planning: ["execution"],
+    execution: ["execution", "verification"],
+    verification: ["delivery"],
+    delivery: [],
+  },
+  canvasSettings: {
+    gridSize: 20,
+    snapToGrid: true,
+    minZoom: 0.45,
+    maxZoom: 1.5,
+    edgeAnimationSpeed: 1200,
+    defaultNodeSpacing: 190,
+  },
+  challengeMeta: {
+    challengeId: "agent-coder-001",
+    title: "Architect an autonomous coding assistant",
+    description: "Design a multi-agent flow that plans, researches, codes, tests, and reviews.",
+    allowedNodeTypeIds: ["planner", "researcher", "coder", "tester", "reviewer"],
+    maxNodes: 7,
+    timeLimitSeconds: 420,
+  },
+};
