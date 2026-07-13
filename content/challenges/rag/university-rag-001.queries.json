@@ -1,0 +1,17 @@
+[
+  {
+    "query": "What is the meaning of business?",
+    "expectedKeywords": ["business", "activity", "profit", "goods", "services"],
+    "answerLead": "According to the business basics document, the meaning of business is"
+  },
+  {
+    "query": "What are the main characteristics of business?",
+    "expectedKeywords": ["economic activities", "exchange", "profit motive", "risk", "regularity"],
+    "answerLead": "The document explains that the main characteristics of business include"
+  },
+  {
+    "query": "What is the difference between industry and commerce?",
+    "expectedKeywords": ["industry", "commerce", "production", "distribution", "exchange"],
+    "answerLead": "In the document, industry and commerce are differentiated as follows"
+  }
+]

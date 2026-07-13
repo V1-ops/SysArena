@@ -1,0 +1,38 @@
+{
+  "id": "university-rag-001",
+  "title": "Build a RAG assistant for Business Basics",
+  "category": "RAG",
+  "difficulty": "Easy",
+  "rewardXp": 120,
+  "estimatedTime": "8 min",
+  "summary": "Assemble a PDF-based RAG pipeline that answers business basics questions from the provided business knowledge document.",
+  "objectives": [
+    "Load the business PDF into the pipeline",
+    "Chunk the document using Recursive Text Splitting",
+    "Embed and store chunks in FAISS for dense retrieval",
+    "Rerank retrieved chunks and generate a structured answer"
+  ],
+  "supportedComponents": [
+    "PDF Loader",
+    "Recursive Text Splitting",
+    "Embeddings",
+    "FAISS Vector Store",
+    "Dense Retriever",
+    "Reranker",
+    "Prompt Template",
+    "LLM"
+  ],
+  "hint": "The correct business RAG flow is: load PDF, split recursively, embed chunks, store in FAISS, retrieve densely, rerank, prompt the LLM.",
+  "scoringDimensions": [
+    { "label": "Architecture correctness", "weight": 40 },
+    { "label": "Retrieval readiness", "weight": 20 },
+    { "label": "Answer quality", "weight": 20 },
+    { "label": "Latency performance", "weight": 10 },
+    { "label": "Best-practice bonus", "weight": 10 }
+  ],
+  "validationRules": {
+    "requiredCore": ["PDF Loader", "Recursive Text Splitting", "Embeddings", "FAISS Vector Store", "Dense Retriever", "LLM"],
+    "optionalComponents": ["Reranker", "Prompt Template"],
+    "singlePipeline": true
+  }
+}
