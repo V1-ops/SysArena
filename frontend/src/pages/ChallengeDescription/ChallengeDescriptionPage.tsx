@@ -7,6 +7,8 @@ import { Button } from "../../components/ui/button";
 export function ChallengeDescriptionPage() {
   const { challengeId } = useParams();
   const challenge = challenges.find((item) => item.id === challengeId) ?? challenges[0];
+  const isOptimizer = challenge.category === "Optimize" && challenge.id === "optimizer-gradient-001";
+  const isPhysicsOptimizer = challenge.id === "physics-optimizer-001";
 
   return (
     <div className="space-y-8">
@@ -88,7 +90,9 @@ export function ChallengeDescriptionPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">
-                <Link to={`/build/${challenge.id}`}>Start Building</Link>
+                <Link to={isPhysicsOptimizer ? `/physics-optimizer/${challenge.id}` : isOptimizer ? `/optimizer/${challenge.id}` : `/build/${challenge.id}`}>
+                  {isPhysicsOptimizer ? "Launch Physics Game" : isOptimizer ? "Enter Optimizer Dojo" : "Start Building"}
+                </Link>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link to="/challenges">Back to Challenges</Link>
