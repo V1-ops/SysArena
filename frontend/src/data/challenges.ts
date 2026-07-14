@@ -49,6 +49,7 @@ export const challenges: Challenge[] = [
     rewardXp: 120,
     estimatedTime: "8 min",
     summary:
+<<<<<<< HEAD
       "Assemble a PDF-based RAG pipeline that answers business basics questions from the provided knowledge document.",
     problemIntro:
       "A business student asks questions about a Business Basics handbook, but the assistant cannot read the entire PDF for every request. Your task is to design a Retrieval-Augmented Generation pipeline that loads the handbook, breaks it into useful chunks, stores searchable embeddings, retrieves the best evidence, and gives the language model grounded context for its answer.",
@@ -67,12 +68,21 @@ export const challenges: Challenge[] = [
       "Prompt Template",
       "LLM",
     ],
+=======
+      "Assemble a retrieval pipeline that can answer policy questions from documents with high accuracy.",
+    objectives: ["Load documents", "Index embeddings", "Retrieve relevant chunks"],
+    supportedComponents: ["PDF Loader", "Chunking", "Embeddings", "Vector DB", "Retriever", "LLM"],
+    hint: "Without embeddings, your retriever has nothing meaningful to search.",
+>>>>>>> 549e4ce60bde9631539368554ce5da0047e22c36
     stage: 1,
     status: "recommended",
     outcome: "Ground answers in the right context before generation begins.",
     workflow: ["Load", "Embed", "Retrieve", "Answer"],
     tags: ["retrieval", "embeddings", "grounding"],
+<<<<<<< HEAD
     hint: "The core path is PDF Loader → Recursive Text Splitting → Embeddings → FAISS Vector Store → Dense Retriever → LLM. Add a Reranker and Prompt Template for a higher score.",
+=======
+>>>>>>> 549e4ce60bde9631539368554ce5da0047e22c36
   },
   {
     id: "agent-sql-001",
