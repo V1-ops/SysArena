@@ -1,13 +1,13 @@
 import { FileUp, Play, RotateCcw, Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGraphStore } from "../hooks/useGraphStore";
 import { useSimulationTrace } from "../hooks/useSimulationTrace";
 import { serializeGraph } from "../services/serializeGraph";
 import { submitPipeline } from "../services/submitPipeline";
 import { saveRagBuild, saveRagRun } from "../../../lib/rag-session";
-import { runRagChallenge, validateBuild } from "../../../services/api";
-import type { BuildEdge, BuildNode, RagRunResponse } from "../../../types";
+import { runAgentChallenge, runRagChallenge, validateAgentBuild, validateBuild } from "../../../services/api";
+import type { AgentRunResponse, BuildEdge, BuildNode, RagRunResponse } from "../../../types";
 import type { SimulationTraceStep, SubmitPipelineResponse } from "../types/graph.types";
 
 function toBuildNodes(nodeIds: string[], configNodes: ReturnType<typeof useGraphStore.getState>["config"]["nodeRegistry"]): BuildNode[] {
@@ -75,9 +75,28 @@ function toOverlayResponse(run: RagRunResponse): SubmitPipelineResponse {
   };
 }
 
+function toAgentOverlayResponse(run: AgentRunResponse, trace: SimulationTraceStep[]): SubmitPipelineResponse {
+  const overallPoints = run.scoreBreakdown.reduce((sum, item) => sum + item.score, 0);
+  const overallMax = run.scoreBreakdown.reduce((sum, item) => sum + item.maxScore, 0) || 100;
+  return {
+    submissionId: run.runId,
+    status: "completed",
+    score: {
+      overall: overallPoints / overallMax,
+      metrics: Object.fromEntries(
+        run.scoreBreakdown.map((item) => [item.label, item.maxScore ? item.score / item.maxScore : 0])
+      ),
+    },
+    trace,
+    leaderboardRank: Math.max(1, Math.round((overallMax - overallPoints) / 5) + 1),
+    agentResult: run,
+  };
+}
+
 export function SubmitPanel() {
   const [documentName, setDocumentName] = useState("");
   const [documentText, setDocumentText] = useState("");
+  const [schemaHint, setSchemaHint] = useState("");
   const [query, setQuery] = useState("What are the most relevant policy details?");
   const navigate = useNavigate();
   const config = useGraphStore((state) => state.config);
@@ -92,6 +111,11 @@ export function SubmitPanel() {
   const clearEventLog = useGraphStore((state) => state.clearEventLog);
   const runSimulationTrace = useSimulationTrace();
   const isRag = config.id === "rag-builder";
+  const isAgent = config.id === "agent-builder";
+
+  useEffect(() => {
+    setQuery(isAgent ? "What were total sales by category?" : "What are the most relevant policy details?");
+  }, [isAgent]);
 
   async function handleFileChange(file: File | undefined) {
     if (!file) return;
@@ -121,10 +145,11 @@ export function SubmitPanel() {
         edges,
         config,
         "demo-user",
-        isRag
+        isRag || isAgent
           ? {
               documentName,
               documentText,
+              schemaHint,
               query,
             }
           : undefined
@@ -156,6 +181,42 @@ export function SubmitPanel() {
         return;
       }
 
+      if (isAgent) {
+        const buildNodes = toBuildNodes(nodes.map((node) => node.id), config.nodeRegistry);
+        const buildEdges = toBuildEdges(edges);
+        const validation = await validateAgentBuild(config.challengeMeta.challengeId, buildNodes, buildEdges);
+        if (!validation.isValid) {
+          setRunState("error");
+          setErrorMessage(validation.feedback.join(" "));
+          return;
+        }
+
+        const run = await runAgentChallenge(config.challengeMeta.challengeId, buildNodes, buildEdges, {
+          documentName,
+          documentText,
+          schemaHint,
+          query,
+        });
+        const labelToNodeId = new Map(buildNodes.map((node) => [node.label, node.id]));
+        const trace = run.simulationTimeline
+          .map((event): SimulationTraceStep | null => {
+            const nodeId = labelToNodeId.get(event.label);
+            if (!nodeId) return null;
+            return {
+              nodeId,
+              status: event.status === "completed" ? "success" : "error",
+              timestampMs: event.startedAtOffsetMs,
+              durationMs: event.durationMs,
+              activeMessage: `${event.label} is working on the analytical task.`,
+              completedMessage: event.meta?.retry ? "Tester repaired and re-verified the SQL." : `${event.label} completed.`,
+            };
+          })
+          .filter((step): step is SimulationTraceStep => Boolean(step));
+        setLastResponse(toAgentOverlayResponse(run, trace));
+        await runSimulationTrace(trace);
+        return;
+      }
+
       const response = await submitPipeline(payload);
       setLastResponse(response);
       await runSimulationTrace(response.trace);
@@ -177,15 +238,16 @@ export function SubmitPanel() {
         <Play className="h-5 w-5 text-[#66FCF1]" />
       </div>
 
-      {isRag && (
+      {(isRag || isAgent) && (
         <div className="mt-4 space-y-3 rounded-lg border border-[#66FCF1]/10 bg-[#0B0C10] p-3">
           <label className="block">
             <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-[#45A29E]">
               <FileUp className="h-3.5 w-3.5" />
-              Document
+              {isAgent ? "CSV dataset" : "Document"}
             </span>
             <input
               type="file"
+              accept={isAgent ? ".csv,text/csv" : undefined}
               className="block w-full text-xs text-[#C5C6C7]/70 file:mr-3 file:rounded-md file:border-0 file:bg-[#66FCF1] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0B0C10]"
               onChange={(event) => void handleFileChange(event.target.files?.[0])}
             />
@@ -193,17 +255,28 @@ export function SubmitPanel() {
           <textarea
             value={documentText}
             onChange={(event) => setDocumentText(event.target.value)}
-            placeholder="Paste document text here, or upload a text/markdown file."
+            placeholder={isAgent ? "Paste CSV text here, or upload a CSV file. Leave blank for the built-in sales dataset." : "Paste document text here, or upload a text/markdown file."}
             className="min-h-24 w-full resize-y rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs leading-5 text-[#C5C6C7] outline-none transition placeholder:text-[#C5C6C7]/35 focus:border-[#66FCF1]/50"
           />
           <label className="block space-y-2">
-            <span className="text-xs uppercase tracking-[0.16em] text-[#45A29E]">Query</span>
+            <span className="text-xs uppercase tracking-[0.16em] text-[#45A29E]">{isAgent ? "Analytics question" : "Query"}</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="w-full rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs text-[#C5C6C7] outline-none transition focus:border-[#66FCF1]/50"
             />
           </label>
+          {isAgent && (
+            <>
+              <textarea
+                value={schemaHint}
+                onChange={(event) => setSchemaHint(event.target.value)}
+                placeholder="Optional schema hint, e.g. unit_price is in USD"
+                className="min-h-16 w-full resize-y rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs leading-5 text-[#C5C6C7] outline-none transition placeholder:text-[#C5C6C7]/35 focus:border-[#66FCF1]/50"
+              />
+              <p className="text-[11px] leading-4 text-[#C5C6C7]/50">The built-in sample uses sales by category and supports an automatic chart.</p>
+            </>
+          )}
         </div>
       )}
 
