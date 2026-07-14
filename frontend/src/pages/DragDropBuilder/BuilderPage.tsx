@@ -89,6 +89,10 @@ export function BuilderPage() {
               challengeId: challenge.id,
               title: challenge.title,
               description: challenge.summary,
+              hint: challenge.hint,
+              objectives: challenge.objectives,
+              sampleQueries: challenge.sampleQueries,
+              sourceLabel: challenge.category === "RAG" ? "Business Basics PDF · preloaded" : undefined,
             }
           : undefined
       }

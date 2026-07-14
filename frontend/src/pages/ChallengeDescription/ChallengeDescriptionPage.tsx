@@ -54,6 +54,13 @@ export function ChallengeDescriptionPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <Card>
           <CardContent className="space-y-5 p-6">
+            <div className="rounded-2xl border border-[#66FCF1]/12 bg-[#0F151B] p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66FCF1]">Problem Brief</p>
+              <p className="mt-3 text-sm leading-7 text-[#C5C6C7]/75">
+                {challenge.problemIntro ?? challenge.summary}
+              </p>
+            </div>
+
             <h2 className="text-2xl font-semibold text-white">Mission Details</h2>
             <ul className="space-y-3 text-sm leading-6 text-[#C5C6C7]/70">
               {challenge.objectives.map((item) => (

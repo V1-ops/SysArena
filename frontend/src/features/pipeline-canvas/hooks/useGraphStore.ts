@@ -76,21 +76,42 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
   onConnect: (connection) => {
     const { nodes, edges, config } = get();
-    if (!isValidConnection(connection, nodes, edges, config)) {
-      set({ errorMessage: "That connection does not match the current mode rules or handle data types." });
+    const isStructuralConnection = Boolean(
+      connection.source &&
+        connection.target &&
+        connection.source !== connection.target &&
+        !edges.some(
+          (edge) =>
+            edge.source === connection.source &&
+            edge.target === connection.target &&
+            edge.sourceHandle === connection.sourceHandle &&
+            edge.targetHandle === connection.targetHandle
+        )
+    );
+
+    if (!isStructuralConnection) {
+      set({ errorMessage: "That edge is a duplicate or connects a node to itself." });
       return;
     }
+
+    const isSemanticallyValid = isValidConnection(connection, nodes, edges, config);
+
     set({
       edges: addEdge(
         {
           ...connection,
           id: `${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,
           animated: false,
-          style: { stroke: config.theme.edgeColor, strokeWidth: 2 },
+          data: { isSemanticallyValid },
+          style: isSemanticallyValid
+            ? { stroke: config.theme.edgeColor, strokeWidth: 2 }
+            : { stroke: "#F59E0B", strokeWidth: 2, strokeDasharray: "6 4" },
         },
         edges
       ),
-      errorMessage: null,
+      errorMessage: isSemanticallyValid
+        ? null
+        : "Warning: this connection is structurally allowed but does not match the recommended data flow. It will reduce your score when simulated.",
     });
   },
   addNode: (nodeDef, position) => {
@@ -142,6 +163,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         style: {
           stroke: nodeId && edge.target === nodeId ? get().config.theme.edgeAnimatedColor : get().config.theme.edgeColor,
           strokeWidth: nodeId && edge.target === nodeId ? 3 : 2,
+          ...(nodeId || edge.data?.isSemanticallyValid !== false
+            ? {}
+            : { stroke: "#F59E0B", strokeDasharray: "6 4" }),
         },
       })),
     }),
@@ -172,7 +196,10 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       edges: get().edges.map((edge) => ({
         ...edge,
         animated: false,
-        style: { stroke: get().config.theme.edgeColor, strokeWidth: 2 },
+        style:
+          edge.data?.isSemanticallyValid === false
+            ? { stroke: "#F59E0B", strokeWidth: 2, strokeDasharray: "6 4" }
+            : { stroke: get().config.theme.edgeColor, strokeWidth: 2 },
       })),
     }),
   resetGraph: () =>

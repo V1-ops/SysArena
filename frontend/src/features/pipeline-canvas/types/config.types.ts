@@ -29,6 +29,10 @@ export interface GameModeConfig {
     title: string;
     description: string;
     allowedNodeTypeIds: string[];
+    hint?: string;
+    objectives?: string[];
+    sampleQueries?: string[];
+    sourceLabel?: string;
     maxNodes?: number;
     timeLimitSeconds?: number;
   };

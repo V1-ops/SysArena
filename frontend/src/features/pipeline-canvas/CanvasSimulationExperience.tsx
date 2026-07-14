@@ -3,10 +3,13 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { ArrowLeft, GitBranch, Workflow } from "lucide-react";
 import { Link } from "react-router-dom";
 import { EventLog } from "./canvas/EventLog";
+import { Boxes, GitBranch, Lightbulb, Workflow } from "lucide-react";
 import { AgentControlRoom } from "./canvas/AgentControlRoom";
+import { EventLog } from "./canvas/EventLog";
 import { NodePalette } from "./canvas/NodePalette";
 import { PipelineCanvas } from "./canvas/PipelineCanvas";
 import { PropertiesPanel } from "./canvas/PropertiesPanel";
+import { RagMissionSidebar } from "./canvas/RagMissionSidebar";
 import { ScoreOverlay } from "./canvas/ScoreOverlay";
 import { SubmitPanel } from "./canvas/SubmitPanel";
 import { gameModeConfigs, type GameModeId } from "./config";
@@ -79,7 +82,28 @@ function CanvasSimulationInner({
         </div>
       </header>
 
-      <section className={`grid min-h-0 gap-5 ${config.id === "agent-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_420px]" : "xl:grid-cols-[300px_minmax(0,1fr)_340px]"}`}>
+      {(config.challengeMeta.hint || config.challengeMeta.sourceLabel) && (
+        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          {config.challengeMeta.hint && (
+            <div className="flex items-start gap-3 rounded-lg border border-[#66FCF1]/15 bg-[#101820] px-4 py-3">
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#66FCF1]" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66FCF1]">Hint</p>
+                <p className="mt-1 text-sm leading-6 text-[#C5C6C7]/75">{config.challengeMeta.hint}</p>
+              </div>
+            </div>
+          )}
+          {config.challengeMeta.sourceLabel && (
+            <div className="rounded-lg border border-[#45A29E]/20 bg-[#101820] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#45A29E]">Challenge source</p>
+              <p className="mt-1 text-sm text-white">{config.challengeMeta.sourceLabel}</p>
+              <p className="mt-1 text-xs leading-5 text-[#C5C6C7]/60">The document is already loaded. Your job is to design the pipeline that processes it.</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className={`grid min-h-0 gap-5 ${config.id === "agent-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_420px]" : config.id === "rag-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_380px]" : "xl:grid-cols-[300px_minmax(0,1fr)_340px]"}`}>
         <NodePalette />
 
         <div className="min-w-0 space-y-4">
@@ -97,6 +121,8 @@ function CanvasSimulationInner({
 
         {config.id === "agent-builder" ? (
           <AgentControlRoom />
+        ) : config.id === "rag-builder" ? (
+          <RagMissionSidebar />
         ) : (
           <div className="space-y-5">
             <PropertiesPanel />

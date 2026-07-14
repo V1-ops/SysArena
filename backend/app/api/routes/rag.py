@@ -14,14 +14,6 @@ def run_rag(payload: RagRunRequest):
         raise HTTPException(status_code=404, detail="Challenge not found")
 
     validation = validate_pipeline(challenge, payload.nodes, payload.edges)
-    if not validation.isValid:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Pipeline validation failed",
-                "validation": validation.model_dump(),
-            },
-        )
 
     try:
         from app.services.rag_engine import run_rag_pipeline
@@ -32,8 +24,13 @@ def run_rag(payload: RagRunRequest):
             edges=payload.edges,
             query=payload.query,
             normalized_pipeline=validation.normalizedPipeline,
+            validation=validation,
         )
-    except RuntimeError as exc:
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="The challenge source document was not found.") from exc
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="The RAG execution dependency is unavailable.") from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"RAG execution failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="RAG execution failed unexpectedly.") from exc

@@ -64,6 +64,11 @@ export function ResultPage() {
               {ragRun?.judgeFeedback.positive ??
                 "Strong architecture overall. You balanced delivery reliability and speed well, with a clear service path."}
             </p>
+            {ragRun && ragRun.pipelineValid === false && (
+              <div className="rounded-xl border border-amber-400/20 bg-amber-950/20 px-4 py-3 text-sm leading-6 text-amber-100">
+                This run completed with architecture issues. Review the feedback below and adjust the graph before replaying.
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-center">
             <div className="flex h-40 w-40 items-center justify-center rounded-full border border-[#66FCF1]/15 bg-[radial-gradient(circle_at_top,rgba(102,252,241,0.18),transparent_40%),#10161d] shadow-[0_0_60px_rgba(102,252,241,0.12)]">
@@ -72,6 +77,61 @@ export function ResultPage() {
           </div>
         </CardContent>
       </Card>
+
+      {ragRun && (
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[#45A29E]">Simulation output</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Grounded answer</h2>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-[#0F151B] p-4 text-sm leading-7 text-[#C5C6C7]/75">
+                {ragRun.answer}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white">Retrieved evidence</p>
+                <div className="mt-3 space-y-2">
+                  {ragRun.retrievedChunks.slice(0, 3).map((chunk) => (
+                    <div key={chunk.chunkId} className="rounded-xl border border-white/5 bg-[#0F151B] p-3">
+                      <div className="flex items-center justify-between gap-3 text-xs text-[#66FCF1]">
+                        <span>{chunk.chunkId}</span>
+                        <span>score {chunk.score.toFixed(3)}</span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-[#C5C6C7]/65">{chunk.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[#45A29E]">Run telemetry</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">What happened</h2>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <Metric label="Latency" value={`${ragRun.metrics.latencyMs} ms`} />
+                <Metric label="Retrieved chunks" value={String(ragRun.metrics.retrievedChunkCount)} />
+                <Metric label="Top K" value={String(ragRun.metrics.topK)} />
+                <Metric label="Chunking" value={`${ragRun.metrics.chunkSize} / ${ragRun.metrics.chunkOverlap}`} />
+                <Metric label="Reranker" value={ragRun.metrics.rerankerUsed ? "Used" : "Not used"} />
+                <Metric label="Execution" value={ragRun.metrics.estimatedCost} />
+                <Metric label="Execution mode" value={ragRun.metrics.executionMode} />
+                <Metric label="Embedding model" value={ragRun.metrics.embeddingModel} />
+                <Metric label="Generation model" value={ragRun.metrics.generationModel} />
+              </div>
+              {ragRun.executionDiagnostics?.warnings.length ? (
+                <div className="rounded-xl border border-amber-400/20 bg-amber-950/20 px-4 py-3 text-xs leading-5 text-amber-100">
+                  {ragRun.executionDiagnostics.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
         <Card>
@@ -137,6 +197,15 @@ export function ResultPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/5 bg-[#0F151B] px-4 py-3">
+      <p className="text-xs text-[#C5C6C7]/55">{label}</p>
+      <p className="mt-1 text-sm font-medium text-white">{value}</p>
     </div>
   );
 }

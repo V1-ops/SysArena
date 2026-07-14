@@ -26,6 +26,8 @@ def _load_env_file() -> None:
 @dataclass(frozen=True)
 class Settings:
     huggingface_api_token: str
+    rag_execution_mode: str
+    rag_external_timeout_seconds: int
     hf_llm_model: str
     hf_embedding_model: str
     rag_source_pdf_path: Path
@@ -42,6 +44,8 @@ def get_settings() -> Settings:
     resolved_source = (BACKEND_DIR / source_path).resolve()
     return Settings(
         huggingface_api_token=os.getenv("HUGGINGFACE_API_TOKEN", ""),
+        rag_execution_mode=os.getenv("RAG_EXECUTION_MODE", "local").strip().lower(),
+        rag_external_timeout_seconds=int(os.getenv("RAG_EXTERNAL_TIMEOUT_SECONDS", "15")),
         hf_llm_model=os.getenv("HF_LLM_MODEL", "Qwen/Qwen2.5-7B-Instruct"),
         hf_embedding_model=os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
         rag_source_pdf_path=resolved_source,
