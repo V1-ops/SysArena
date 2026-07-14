@@ -28,7 +28,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </div>
               <div>
                 <p className="text-lg font-semibold tracking-tight text-white">
-                  Engineering Verse
+                  EngineerVerse
                 </p>
                 <p className="text-xs text-[#C5C6C7]/50">Playable OS for engineers</p>
               </div>
@@ -75,7 +75,7 @@ export function AppShell({ children }: PropsWithChildren) {
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#66FCF1]/20 bg-[#0F1820]">
                     <Puzzle className="h-5 w-5 text-[#66FCF1]" />
                   </div>
-                  <span className="text-lg font-semibold text-white">Engineering Verse</span>
+                  <span className="text-lg font-semibold text-white">EngineerVerse</span>
                 </div>
 
                 <div className="ml-auto flex flex-wrap items-center gap-3">
