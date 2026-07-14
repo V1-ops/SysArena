@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Boxes, GitBranch, Workflow } from "lucide-react";
+import { Boxes, GitBranch, Lightbulb, Workflow } from "lucide-react";
 import { EventLog } from "./canvas/EventLog";
 import { NodePalette } from "./canvas/NodePalette";
 import { PipelineCanvas } from "./canvas/PipelineCanvas";
@@ -84,6 +84,27 @@ function CanvasSimulationInner({
           </div>
         </div>
       </header>
+
+      {(config.challengeMeta.hint || config.challengeMeta.sourceLabel) && (
+        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          {config.challengeMeta.hint && (
+            <div className="flex items-start gap-3 rounded-lg border border-[#66FCF1]/15 bg-[#101820] px-4 py-3">
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#66FCF1]" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66FCF1]">Hint</p>
+                <p className="mt-1 text-sm leading-6 text-[#C5C6C7]/75">{config.challengeMeta.hint}</p>
+              </div>
+            </div>
+          )}
+          {config.challengeMeta.sourceLabel && (
+            <div className="rounded-lg border border-[#45A29E]/20 bg-[#101820] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#45A29E]">Challenge source</p>
+              <p className="mt-1 text-sm text-white">{config.challengeMeta.sourceLabel}</p>
+              <p className="mt-1 text-xs leading-5 text-[#C5C6C7]/60">The document is already loaded. Your job is to design the pipeline that processes it.</p>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="grid min-h-0 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <NodePalette />

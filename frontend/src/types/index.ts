@@ -21,6 +21,7 @@ export interface ScoringDimension {
 
 export interface Challenge extends ChallengeSummary {
   category: ChallengeCategory | string;
+  problemIntro?: string;
   objectives: string[];
   supportedComponents: string[];
   hint: string;
@@ -50,11 +51,15 @@ export interface BuildNode {
   id: string;
   type: string;
   label: string;
+  values?: Record<string, unknown>;
 }
 
 export interface BuildEdge {
+  id?: string;
   source: string;
   target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
 }
 
 export interface InvalidEdge {
@@ -86,6 +91,7 @@ export interface SimulationEvent {
   status: string;
   startedAtOffsetMs: number;
   durationMs: number;
+  nodeId?: string | null;
   meta?: Record<string, unknown> | null;
 }
 
@@ -108,6 +114,9 @@ export interface RagMetrics {
   topK: number;
   contextChars: number;
   estimatedCost: string;
+  chunkSize: number;
+  chunkOverlap: number;
+  rerankerUsed: boolean;
 }
 
 export interface RagRunResponse {
@@ -119,4 +128,6 @@ export interface RagRunResponse {
   simulationTimeline: SimulationEvent[];
   scoreBreakdown: ScoreBreakdown[];
   judgeFeedback: JudgeFeedback;
+  pipelineValid?: boolean;
+  validationFeedback?: string[];
 }

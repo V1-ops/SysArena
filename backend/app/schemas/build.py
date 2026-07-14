@@ -1,15 +1,20 @@
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class BuildNode(BaseModel):
     id: str
     type: str
     label: str
+    values: dict[str, Any] = Field(default_factory=dict)
 
 
 class BuildEdge(BaseModel):
     source: str
     target: str
+    sourceHandle: str | None = None
+    targetHandle: str | None = None
 
 
 class ValidateBuildRequest(BaseModel):

@@ -15,14 +15,6 @@ def run_rag(payload: RagRunRequest):
         raise HTTPException(status_code=404, detail="Challenge not found")
 
     validation = validate_pipeline(challenge, payload.nodes, payload.edges)
-    if not validation.isValid:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Pipeline validation failed",
-                "validation": validation.model_dump(),
-            },
-        )
 
     try:
         return run_rag_pipeline(
@@ -31,6 +23,7 @@ def run_rag(payload: RagRunRequest):
             edges=payload.edges,
             query=payload.query,
             normalized_pipeline=validation.normalizedPipeline,
+            validation=validation,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

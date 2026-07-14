@@ -24,6 +24,7 @@ class SimulationEvent(BaseModel):
     status: str
     startedAtOffsetMs: int
     durationMs: int
+    nodeId: str | None = None
     meta: dict | None = None
 
 
@@ -46,6 +47,9 @@ class RagMetrics(BaseModel):
     topK: int
     contextChars: int
     estimatedCost: str
+    chunkSize: int
+    chunkOverlap: int
+    rerankerUsed: bool
 
 
 class RagRunResponse(BaseModel):
@@ -57,3 +61,5 @@ class RagRunResponse(BaseModel):
     simulationTimeline: list[SimulationEvent]
     scoreBreakdown: list[ScoreBreakdown]
     judgeFeedback: JudgeFeedback
+    pipelineValid: bool = True
+    validationFeedback: list[str] = []

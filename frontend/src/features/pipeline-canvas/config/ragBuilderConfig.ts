@@ -127,7 +127,10 @@ export const ragBuilderConfig: GameModeConfig = {
     ingestion: ["ingestion", "indexing"],
     indexing: ["indexing", "retrieval"],
     retrieval: ["retrieval", "generation"],
-    generation: [],
+    // Prompt Template and LLM are both generation nodes. Handle data types
+    // still restrict this to valid links such as prompt -> LLM.prompt and
+    // context -> LLM.context.
+    generation: ["generation"],
   },
   canvasSettings: {
     gridSize: 20,

@@ -11,6 +11,7 @@ from pypdf import PdfReader
 
 from app.core.config import get_settings
 from app.schemas.build import BuildEdge, BuildNode
+from app.schemas.build import ValidateBuildResponse
 from app.schemas.rag import (
     JudgeFeedback,
     RagMetrics,
@@ -22,20 +23,49 @@ from app.schemas.rag import (
 from app.services.challenge_loader import load_challenge_queries, load_challenge_source
 
 
-def run_rag_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge], query: str, normalized_pipeline: list[str]) -> RagRunResponse:
-    del nodes, edges
+def run_rag_pipeline(
+    challenge,
+    nodes: list[BuildNode],
+    edges: list[BuildEdge],
+    query: str,
+    normalized_pipeline: list[str],
+    validation: ValidateBuildResponse,
+) -> RagRunResponse:
+    del edges
     settings = get_settings()
     start = perf_counter()
 
+    node_values = {node.label: node.values for node in nodes}
+    chunk_size = _bounded_int(
+        node_values.get("Recursive Text Splitting", {}).get("chunkSize"),
+        settings.rag_chunk_size,
+        minimum=100,
+        maximum=2000,
+    )
+    chunk_overlap = _bounded_int(
+        node_values.get("Recursive Text Splitting", {}).get("overlap"),
+        settings.rag_chunk_overlap,
+        minimum=0,
+        maximum=max(0, chunk_size - 1),
+    )
+    top_k = _bounded_int(
+        node_values.get("Dense Retriever", {}).get("topK"),
+        settings.rag_top_k,
+        minimum=1,
+        maximum=20,
+    )
+    reranker_used = "Reranker" in normalized_pipeline
+
     document_path = load_challenge_source(challenge.id)
-    document_text = _extract_pdf_text(document_path)
-    chunks = _recursive_split(document_text, settings.rag_chunk_size, settings.rag_chunk_overlap)
-    chunk_embeddings = _embed_batch(chunks)
-    faiss_index = _build_faiss_index(chunk_embeddings)
+    chunks, faiss_index = _load_or_build_index(
+        document_path=document_path,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
 
     query_embedding = _embed_single(query)
-    dense_hits = _dense_retrieve(faiss_index, chunks, query_embedding, settings.rag_rerank_k)
-    reranked_hits = _rerank_hits(query, dense_hits, settings.rag_top_k)
+    dense_hits = _dense_retrieve(faiss_index, chunks, query_embedding, max(top_k, settings.rag_rerank_k if reranker_used else top_k))
+    reranked_hits = _rerank_hits(query, dense_hits, top_k) if reranker_used else dense_hits[:top_k]
     prompt = _build_prompt(query, reranked_hits)
     answer = _generate_structured_answer(prompt)
 
@@ -47,9 +77,12 @@ def run_rag_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge], 
     metrics = RagMetrics(
         latencyMs=latency_ms,
         retrievedChunkCount=len(retrieved),
-        topK=settings.rag_top_k,
+        topK=top_k,
         contextChars=sum(len(chunk.text) for chunk in retrieved),
-        estimatedCost="HF Inference API usage",
+        estimatedCost="HF Inference API usage" if settings.huggingface_api_token else "Local deterministic fallback",
+        chunkSize=chunk_size,
+        chunkOverlap=chunk_overlap,
+        rerankerUsed=reranker_used,
     )
     query_spec = _match_query_spec(challenge.id, query)
     score_breakdown = _score_run(
@@ -58,13 +91,17 @@ def run_rag_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge], 
         retrieved_chunks=retrieved,
         query_spec=query_spec,
         latency_ms=latency_ms,
+        top_k=top_k,
+        validation=validation,
     )
-    judge_feedback = _build_judge_feedback(normalized_pipeline, score_breakdown)
+    judge_feedback = _build_judge_feedback(normalized_pipeline, score_breakdown, validation.feedback)
     simulation_timeline = _build_timeline(
+        nodes=nodes,
+        normalized_pipeline=normalized_pipeline,
         query=query,
         chunk_count=len(chunks),
         retrieved_chunks=retrieved,
-        used_optional_rerank="Reranker" in normalized_pipeline,
+        used_optional_rerank=reranker_used,
         latency_ms=max(latency_ms, 1),
     )
     return RagRunResponse(
@@ -76,6 +113,8 @@ def run_rag_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge], 
         simulationTimeline=simulation_timeline,
         scoreBreakdown=score_breakdown,
         judgeFeedback=judge_feedback,
+        pipelineValid=validation.isValid,
+        validationFeedback=validation.feedback,
     )
 
 
@@ -104,6 +143,25 @@ def _recursive_split(text: str, chunk_size: int, chunk_overlap: int) -> list[str
         overlap_text = previous[-chunk_overlap:] if len(previous) > chunk_overlap else previous
         merged.append(f"{overlap_text} {cleaned}".strip())
     return merged
+
+
+@lru_cache(maxsize=4)
+def _load_or_build_index(
+    document_path: str,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> tuple[list[str], faiss.IndexFlatIP]:
+    text = _extract_pdf_text(document_path)
+    chunks = _recursive_split(text, chunk_size, chunk_overlap)
+    return chunks, _build_faiss_index(_embed_batch(chunks))
+
+
+def _bounded_int(value, fallback: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = fallback
+    return max(minimum, min(parsed, maximum))
 
 
 def _split_with_separators(text: str, chunk_size: int, separators: list[str]) -> list[str]:
@@ -323,18 +381,33 @@ def _match_query_spec(challenge_id: str, query: str) -> dict:
     for item in queries:
         if item["query"].strip().lower() == lowered:
             return item
-    return queries[0] if queries else {"query": query, "expectedKeywords": [], "answerLead": "Based on the document,"}
+    return {"query": query, "expectedKeywords": [], "answerLead": "Based on the document,"}
 
 
-def _score_run(normalized_pipeline: list[str], answer: str, retrieved_chunks: list[RetrievedChunk], query_spec: dict, latency_ms: int) -> list[ScoreBreakdown]:
+def _score_run(
+    normalized_pipeline: list[str],
+    answer: str,
+    retrieved_chunks: list[RetrievedChunk],
+    query_spec: dict,
+    latency_ms: int,
+    top_k: int,
+    validation: ValidateBuildResponse,
+) -> list[ScoreBreakdown]:
     architecture = 40
+    architecture -= len(validation.requiredMissingNodes) * 8
+    architecture -= len(validation.invalidEdges) * 5
+    blocking_feedback = [
+        item for item in validation.feedback
+        if not item.startswith("Optional improvement") and not item.startswith("Pipeline is valid")
+    ]
+    architecture -= len(blocking_feedback) * 3
     if "Reranker" not in normalized_pipeline:
         architecture -= 4
     if "Prompt Template" not in normalized_pipeline:
         architecture -= 3
 
     retrieval = 20 if retrieved_chunks else 6
-    if len(retrieved_chunks) < min(get_settings().rag_top_k, 2):
+    if len(retrieved_chunks) < min(top_k, 2):
         retrieval -= 4
 
     expected = [keyword.lower() for keyword in query_spec.get("expectedKeywords", [])]
@@ -358,7 +431,11 @@ def _score_run(normalized_pipeline: list[str], answer: str, retrieved_chunks: li
     ]
 
 
-def _build_judge_feedback(normalized_pipeline: list[str], score_breakdown: list[ScoreBreakdown]) -> JudgeFeedback:
+def _build_judge_feedback(
+    normalized_pipeline: list[str],
+    score_breakdown: list[ScoreBreakdown],
+    validation_feedback: list[str],
+) -> JudgeFeedback:
     total = sum(item.score for item in score_breakdown)
     positive = "Your pipeline includes the core RAG stages needed to answer from the business PDF."
     weakness = "The quality of the final answer depends heavily on retrieved chunk relevance."
@@ -373,6 +450,14 @@ def _build_judge_feedback(normalized_pipeline: list[str], score_breakdown: list[
         next_step = "Cache embeddings or reduce chunk volume to make the experience faster."
     if total >= 90:
         positive = "Excellent build. This RAG pipeline is structurally strong and close to a production-ready business QA flow."
+    blocking_feedback = [
+        item for item in validation_feedback
+        if not item.startswith("Optional improvement") and not item.startswith("Pipeline is valid")
+    ]
+    if blocking_feedback:
+        weakness = blocking_feedback[0]
+        next_step = "Fix the highlighted connection or missing component, then run the simulation again."
+        recommendations = blocking_feedback[:3] + recommendations[: max(0, 3 - len(blocking_feedback))]
     return JudgeFeedback(
         positive=positive,
         weakness=weakness,
@@ -381,73 +466,52 @@ def _build_judge_feedback(normalized_pipeline: list[str], score_breakdown: list[
     )
 
 
-def _build_timeline(query: str, chunk_count: int, retrieved_chunks: list[RetrievedChunk], used_optional_rerank: bool, latency_ms: int) -> list[SimulationEvent]:
-    offsets = [
-        ("load_documents", "Load PDF document", 0, 180, {"chunkCount": 1}),
-        ("chunk_documents", "Recursive Text Splitting", 180, 260, {"chunkCount": chunk_count}),
-        ("generate_embeddings", "Generate HF embeddings", 440, 1200, {"chunkCount": chunk_count}),
-        ("index_vector_store", "Store vectors in FAISS", 1640, 220, {"chunkCount": chunk_count}),
-        ("receive_query", "Embed user query", 1860, 280, {"query": query}),
-        ("retrieve_chunks", "Dense retrieval from FAISS", 2140, 260, {"retrievedChunkCount": len(retrieved_chunks)}),
-    ]
-    timeline = [
-        SimulationEvent(
-            id=event_id,
-            type=event_id,
-            label=label,
-            status="completed",
-            startedAtOffsetMs=start,
-            durationMs=duration,
-            meta=meta,
-        )
-        for event_id, label, start, duration, meta in offsets
-    ]
-    next_start = 2400
-    if used_optional_rerank:
+def _build_timeline(
+    nodes: list[BuildNode],
+    normalized_pipeline: list[str],
+    query: str,
+    chunk_count: int,
+    retrieved_chunks: list[RetrievedChunk],
+    used_optional_rerank: bool,
+    latency_ms: int,
+) -> list[SimulationEvent]:
+    del used_optional_rerank, latency_ms
+    node_ids = {node.label: node.id for node in nodes}
+    durations = {
+        "PDF Loader": 260,
+        "Recursive Text Splitting": 420,
+        "Embeddings": 900,
+        "FAISS Vector Store": 360,
+        "Dense Retriever": 420,
+        "Reranker": 360,
+        "Prompt Template": 260,
+        "LLM": 900,
+    }
+    metadata = {
+        "PDF Loader": {"document": "Business Basics PDF", "sourceLocked": True},
+        "Recursive Text Splitting": {"chunkCount": chunk_count},
+        "Embeddings": {"chunkCount": chunk_count},
+        "FAISS Vector Store": {"indexedChunkCount": chunk_count},
+        "Dense Retriever": {"query": query, "retrievedChunkCount": len(retrieved_chunks)},
+        "Reranker": {"retrievedChunkCount": len(retrieved_chunks)},
+        "Prompt Template": {"contextChars": sum(len(chunk.text) for chunk in retrieved_chunks)},
+        "LLM": {"previewText": retrieved_chunks[0].text[:120] if retrieved_chunks else ""},
+    }
+    timeline: list[SimulationEvent] = []
+    next_start = 0
+    for index, label in enumerate(normalized_pipeline):
+        duration = durations.get(label, 300)
         timeline.append(
             SimulationEvent(
-                id="optional_rerank",
-                type="optional_rerank",
-                label="Rerank retrieved chunks",
+                id=f"rag-step-{index}-{label.lower().replace(' ', '-')}",
+                type=label.lower().replace(" ", "-"),
+                label=label,
                 status="completed",
+                nodeId=node_ids.get(label),
                 startedAtOffsetMs=next_start,
-                durationMs=180,
-                meta={"retrievedChunkCount": len(retrieved_chunks)},
+                durationMs=duration,
+                meta=metadata.get(label, {}),
             )
         )
-        next_start += 180
-    timeline.append(
-        SimulationEvent(
-            id="compose_prompt",
-            type="compose_prompt",
-            label="Build prompt template context",
-            status="completed",
-            startedAtOffsetMs=next_start,
-            durationMs=120,
-            meta={"contextChars": sum(len(chunk.text) for chunk in retrieved_chunks)},
-        )
-    )
-    next_start += 120
-    timeline.append(
-        SimulationEvent(
-            id="generate_answer",
-            type="generate_answer",
-            label="Generate structured answer with Qwen 2.5",
-            status="completed",
-            startedAtOffsetMs=next_start,
-            durationMs=max(300, latency_ms - next_start),
-            meta={"previewText": retrieved_chunks[0].text[:120] if retrieved_chunks else ""},
-        )
-    )
-    timeline.append(
-        SimulationEvent(
-            id="complete",
-            type="complete",
-            label="Complete",
-            status="completed",
-            startedAtOffsetMs=latency_ms,
-            durationMs=1,
-            meta={"retrievedChunkCount": len(retrieved_chunks)},
-        )
-    )
+        next_start += duration
     return timeline

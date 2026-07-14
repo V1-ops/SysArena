@@ -1,5 +1,5 @@
-import { FileUp, Play, RotateCcw, Send } from "lucide-react";
-import { useState } from "react";
+import { Play, RotateCcw, Send } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGraphStore } from "../hooks/useGraphStore";
 import { useSimulationTrace } from "../hooks/useSimulationTrace";
@@ -10,51 +10,52 @@ import { runRagChallenge, validateBuild } from "../../../services/api";
 import type { BuildEdge, BuildNode, RagRunResponse } from "../../../types";
 import type { SimulationTraceStep, SubmitPipelineResponse } from "../types/graph.types";
 
-function toBuildNodes(nodeIds: string[], configNodes: ReturnType<typeof useGraphStore.getState>["config"]["nodeRegistry"]): BuildNode[] {
-  return nodeIds
-    .map((nodeId) => {
-      const node = useGraphStore.getState().nodes.find((item) => item.id === nodeId);
-      const nodeDef = node ? configNodes.find((item) => item.id === node.data.nodeTypeId) : undefined;
-      if (!node || !nodeDef) {
-        return null;
-      }
-      return {
+function toBuildNodes(
+  nodes: ReturnType<typeof useGraphStore.getState>["nodes"],
+  configNodes: ReturnType<typeof useGraphStore.getState>["config"]["nodeRegistry"]
+): BuildNode[] {
+  return nodes.flatMap((node) => {
+      const nodeDef = configNodes.find((item) => item.id === node.data.nodeTypeId);
+      if (!nodeDef) return [];
+
+      return [{
         id: node.id,
         type: node.data.nodeTypeId,
         label: nodeDef.label,
-      };
-    })
-    .filter((item): item is BuildNode => Boolean(item));
+        values: node.data.values,
+      }];
+    });
 }
 
 function toBuildEdges(edges: ReturnType<typeof useGraphStore.getState>["edges"]): BuildEdge[] {
   return edges.map((edge) => ({
+    id: edge.id,
     source: edge.source,
     target: edge.target,
+    sourceHandle: edge.sourceHandle ?? null,
+    targetHandle: edge.targetHandle ?? null,
   }));
 }
 
 function toSimulationTrace(run: RagRunResponse, buildNodes: BuildNode[]): SimulationTraceStep[] {
   const labelToNodeId = new Map(buildNodes.map((node) => [node.label, node.id]));
-  const trace: SimulationTraceStep[] = [];
 
-  for (const event of run.simulationTimeline) {
-    const nodeId = labelToNodeId.get(event.label);
-    if (!nodeId) {
-      continue;
-    }
+  return run.simulationTimeline.flatMap((event) => {
+    const nodeId = event.nodeId ?? labelToNodeId.get(event.label);
+    if (!nodeId) return [];
 
-    trace.push({
+    const successful = event.status === "completed" || event.status === "success";
+    return [{
       nodeId,
-      status: event.status === "completed" ? "success" : "error",
+      status: successful ? "success" : "error",
       timestampMs: event.startedAtOffsetMs,
       durationMs: event.durationMs,
-      activeMessage: `Running ${event.label}.`,
-      completedMessage: `${event.label} completed.`,
-    });
-  }
-
-  return trace;
+      activeMessage: event.meta?.description
+        ? String(event.meta.description)
+        : `Running ${event.label}.`,
+      completedMessage: successful ? `${event.label} completed.` : `${event.label} failed.`,
+    }];
+  });
 }
 
 function toOverlayResponse(run: RagRunResponse): SubmitPipelineResponse {
@@ -71,14 +72,11 @@ function toOverlayResponse(run: RagRunResponse): SubmitPipelineResponse {
       ),
     },
     trace: [],
-    leaderboardRank: Math.max(1, Math.round((overallMax - overallPoints) / 5) + 1),
+    leaderboardRank: 0,
   };
 }
 
 export function SubmitPanel() {
-  const [documentName, setDocumentName] = useState("");
-  const [documentText, setDocumentText] = useState("");
-  const [query, setQuery] = useState("What are the most relevant policy details?");
   const navigate = useNavigate();
   const config = useGraphStore((state) => state.config);
   const nodes = useGraphStore((state) => state.nodes);
@@ -88,60 +86,50 @@ export function SubmitPanel() {
   const resetGraph = useGraphStore((state) => state.resetGraph);
   const setRunState = useGraphStore((state) => state.setRunState);
   const setLastResponse = useGraphStore((state) => state.setLastResponse);
+  const lastResponse = useGraphStore((state) => state.lastResponse);
   const setErrorMessage = useGraphStore((state) => state.setErrorMessage);
   const clearEventLog = useGraphStore((state) => state.clearEventLog);
   const runSimulationTrace = useSimulationTrace();
   const isRag = config.id === "rag-builder";
+  const sampleQueries = config.challengeMeta.sampleQueries ?? [];
+  const [query, setQuery] = useState(sampleQueries[0] ?? "What is the meaning of business?");
+  const [queryMode, setQueryMode] = useState<"sample" | "custom">("sample");
+  const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
-  async function handleFileChange(file: File | undefined) {
-    if (!file) return;
-    setDocumentName(file.name);
-    if (file.type.includes("text") || file.name.endsWith(".md") || file.name.endsWith(".csv")) {
-      setDocumentText(await file.text());
-      return;
+  useEffect(() => {
+    if (isRag && sampleQueries.length > 0) {
+      setQuery(sampleQueries[0]);
+      setQueryMode("sample");
     }
-    setDocumentText(`Uploaded file: ${file.name}. Binary/PDF parsing will be handled by backend integration.`);
-  }
+  }, [config.challengeMeta.challengeId, isRag, sampleQueries]);
 
   async function handleSubmit() {
     try {
-      if (isRag && !documentName && !documentText.trim()) {
-        setErrorMessage("Upload or describe a document before running the RAG simulation.");
-        return;
-      }
       if (isRag && !query.trim()) {
-        setErrorMessage("Enter a query before running the RAG simulation.");
+        setErrorMessage("Choose or enter a question before running the RAG simulation.");
         return;
       }
+
       setRunState("submitting");
       setErrorMessage(null);
+      setValidationWarning(null);
       clearEventLog();
+
       const payload = serializeGraph(
         nodes,
         edges,
         config,
         "demo-user",
-        isRag
-          ? {
-              documentName,
-              documentText,
-              query,
-            }
-          : undefined
+        isRag ? { query } : undefined
       );
 
       if (isRag) {
-        const buildNodes = toBuildNodes(
-          nodes.map((node) => node.id),
-          config.nodeRegistry
-        );
+        const buildNodes = toBuildNodes(nodes, config.nodeRegistry);
         const buildEdges = toBuildEdges(edges);
         const validation = await validateBuild(config.challengeMeta.challengeId, buildNodes, buildEdges);
 
         if (!validation.isValid) {
-          setRunState("error");
-          setErrorMessage(validation.feedback.join(" "));
-          return;
+          setValidationWarning(validation.feedback.join(" "));
         }
 
         const run = await runRagChallenge(config.challengeMeta.challengeId, buildNodes, buildEdges, query);
@@ -152,7 +140,6 @@ export function SubmitPanel() {
         const trace = toSimulationTrace(run, buildNodes);
         setLastResponse({ ...overlayResponse, trace });
         await runSimulationTrace(trace);
-        navigate(`/result/${config.challengeMeta.challengeId}`);
         return;
       }
 
@@ -161,7 +148,7 @@ export function SubmitPanel() {
       await runSimulationTrace(response.trace);
     } catch (error) {
       setRunState("error");
-      setErrorMessage(error instanceof Error ? error.message : "Unknown submit error");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to run this simulation.");
     }
   }
 
@@ -171,45 +158,82 @@ export function SubmitPanel() {
     <section className="rounded-lg border border-white/8 bg-[#101820] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-white">Submit Graph</p>
-          <p className="mt-1 text-xs leading-5 text-[#C5C6C7]/60">POST shape is ready for `/api/submit`; local fake mode runs by default.</p>
+          <p className="text-sm font-semibold text-white">Run Simulation</p>
+          <p className="mt-1 text-xs leading-5 text-[#C5C6C7]/60">
+            Build your graph, then watch the document move through every component.
+          </p>
         </div>
         <Play className="h-5 w-5 text-[#66FCF1]" />
       </div>
 
       {isRag && (
         <div className="mt-4 space-y-3 rounded-lg border border-[#66FCF1]/10 bg-[#0B0C10] p-3">
-          <label className="block">
-            <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-[#45A29E]">
-              <FileUp className="h-3.5 w-3.5" />
-              Document
-            </span>
-            <input
-              type="file"
-              className="block w-full text-xs text-[#C5C6C7]/70 file:mr-3 file:rounded-md file:border-0 file:bg-[#66FCF1] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0B0C10]"
-              onChange={(event) => void handleFileChange(event.target.files?.[0])}
-            />
-          </label>
-          <textarea
-            value={documentText}
-            onChange={(event) => setDocumentText(event.target.value)}
-            placeholder="Paste document text here, or upload a text/markdown file."
-            className="min-h-24 w-full resize-y rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs leading-5 text-[#C5C6C7] outline-none transition placeholder:text-[#C5C6C7]/35 focus:border-[#66FCF1]/50"
-          />
-          <label className="block space-y-2">
-            <span className="text-xs uppercase tracking-[0.16em] text-[#45A29E]">Query</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="w-full rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs text-[#C5C6C7] outline-none transition focus:border-[#66FCF1]/50"
-            />
-          </label>
+          <div className="rounded-md border border-[#45A29E]/20 bg-[#101820] px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-[#45A29E]">Preloaded source</p>
+            <p className="mt-1 text-sm font-medium text-white">Business Basics PDF</p>
+            <p className="mt-1 text-xs leading-5 text-[#C5C6C7]/60">No upload is needed. Every player is evaluated against the same document.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 rounded-md border border-white/8 bg-[#101820] p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setQueryMode("sample");
+                if (sampleQueries[0]) setQuery(sampleQueries[0]);
+              }}
+              className={`rounded px-3 py-2 text-xs font-medium transition ${
+                queryMode === "sample" ? "bg-[#66FCF1]/15 text-[#66FCF1]" : "text-[#C5C6C7]/60 hover:text-white"
+              }`}
+            >
+              Sample question
+            </button>
+            <button
+              type="button"
+              onClick={() => setQueryMode("custom")}
+              className={`rounded px-3 py-2 text-xs font-medium transition ${
+                queryMode === "custom" ? "bg-[#66FCF1]/15 text-[#66FCF1]" : "text-[#C5C6C7]/60 hover:text-white"
+              }`}
+            >
+              Ask your own
+            </button>
+          </div>
+
+          {queryMode === "sample" && sampleQueries.length > 0 ? (
+            <label className="block space-y-2">
+              <span className="text-xs uppercase tracking-[0.16em] text-[#45A29E]">Choose a question</span>
+              <select
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="w-full rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs text-[#C5C6C7] outline-none transition focus:border-[#66FCF1]/50"
+              >
+                {sampleQueries.map((sampleQuery) => (
+                  <option key={sampleQuery} value={sampleQuery}>{sampleQuery}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="block space-y-2">
+              <span className="text-xs uppercase tracking-[0.16em] text-[#45A29E]">Your question</span>
+              <input
+                value={queryMode === "custom" ? query : ""}
+                onChange={(event) => setQuery(event.target.value)}
+                className="w-full rounded-md border border-white/10 bg-[#101820] px-3 py-2 text-xs text-[#C5C6C7] outline-none transition focus:border-[#66FCF1]/50"
+                placeholder="Ask anything about the Business Basics document"
+              />
+            </label>
+          )}
         </div>
       )}
 
       {errorMessage && (
-        <div className="mt-4 rounded-lg border border-red-400/20 bg-red-950/30 px-3 py-2 text-xs text-red-100">
+        <div className="mt-4 rounded-lg border border-red-400/20 bg-red-950/30 px-3 py-2 text-xs leading-5 text-red-100">
           {errorMessage}
+        </div>
+      )}
+
+      {validationWarning && (
+        <div className="mt-4 rounded-lg border border-amber-400/25 bg-amber-950/20 px-3 py-2 text-xs leading-5 text-amber-100">
+          <span className="font-semibold">Architecture warning:</span> {validationWarning} The simulation will still run, but these issues will reduce your score.
         </div>
       )}
 
@@ -221,7 +245,7 @@ export function SubmitPanel() {
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-[#66FCF1] px-4 py-2.5 text-sm font-semibold text-[#0B0C10] transition hover:bg-[#8ffdf6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Send className="h-4 w-4" />
-          {busy ? "Running" : "Submit"}
+          {busy ? "Simulating..." : "Run Simulation"}
         </button>
         <button
           type="button"
@@ -233,6 +257,16 @@ export function SubmitPanel() {
           <RotateCcw className="h-4 w-4" />
         </button>
       </div>
+
+      {isRag && runState === "completed" && lastResponse && (
+        <button
+          type="button"
+          onClick={() => navigate(`/result/${config.challengeMeta.challengeId}`)}
+          className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#66FCF1]/30 bg-[#66FCF1]/10 px-4 py-2.5 text-sm font-semibold text-[#66FCF1] transition hover:border-[#66FCF1]/60 hover:bg-[#66FCF1]/15"
+        >
+          View Scorecard
+        </button>
+      )}
     </section>
   );
 }

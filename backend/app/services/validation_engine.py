@@ -12,12 +12,24 @@ CANONICAL_CORE = [
 ]
 OPTIONAL_COMPONENTS = {"Reranker", "Prompt Template"}
 
+RAG_HANDLE_TYPES = {
+    "pdf-loader": {"inputs": {}, "outputs": {"documents": "documents"}},
+    "chunker": {"inputs": {"documents": "documents"}, "outputs": {"chunks": "chunks"}},
+    "embedder": {"inputs": {"chunks": "chunks"}, "outputs": {"vectors": "vectors"}},
+    "vector-db": {"inputs": {"vectors": "vectors"}, "outputs": {"index": "index"}},
+    "retriever": {"inputs": {"index": "index"}, "outputs": {"context": "context"}},
+    "reranker": {"inputs": {"context": "context"}, "outputs": {"reranked-context": "context"}},
+    "prompt-template": {"inputs": {"context": "context"}, "outputs": {"prompt": "prompt"}},
+    "llm": {"inputs": {"context": "context", "prompt": "prompt"}, "outputs": {"answer": "answer"}},
+}
+
 
 def validate_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge]) -> ValidateBuildResponse:
     allowed_components = set(challenge.supportedComponents)
+    required_components = challenge.validationRules.get("requiredCore", CANONICAL_CORE)
     node_labels = [node.label for node in nodes]
     label_counts = Counter(node_labels)
-    required_missing = [label for label in CANONICAL_CORE if label not in label_counts]
+    required_missing = [label for label in required_components if label not in label_counts]
     feedback: list[str] = []
     invalid_edges: list[InvalidEdge] = []
 
@@ -25,7 +37,7 @@ def validate_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge])
     if unsupported:
         feedback.append(f"Unsupported components detected: {', '.join(sorted(set(unsupported)))}.")
 
-    duplicates = [label for label, count in label_counts.items() if count > 1 and label in CANONICAL_CORE]
+    duplicates = [label for label, count in label_counts.items() if count > 1 and label in required_components]
     if duplicates:
         feedback.append(f"Duplicate core components are not allowed: {', '.join(duplicates)}.")
 
@@ -77,15 +89,23 @@ def validate_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge])
                     InvalidEdge(source=edge.source, target=edge.target, reason="Dense Retriever cannot feed FAISS Vector Store.")
                 )
 
-    normalized_pipeline = [label for label in CANONICAL_CORE if label in label_counts]
-    if "Reranker" in label_counts:
-        llm_index = normalized_pipeline.index("LLM") if "LLM" in normalized_pipeline else len(normalized_pipeline)
-        normalized_pipeline.insert(llm_index, "Reranker")
-    if "Prompt Template" in label_counts:
-        llm_index = normalized_pipeline.index("LLM") if "LLM" in normalized_pipeline else len(normalized_pipeline)
-        normalized_pipeline.insert(llm_index, "Prompt Template")
+            if edge.sourceHandle or edge.targetHandle:
+                source_def = RAG_HANDLE_TYPES.get(node_map[edge.source].type)
+                target_def = RAG_HANDLE_TYPES.get(node_map[edge.target].type)
+                source_type = source_def and source_def["outputs"].get(edge.sourceHandle or "")
+                target_type = target_def and target_def["inputs"].get(edge.targetHandle or "")
+                if not source_type or not target_type or source_type != target_type:
+                    invalid_edges.append(
+                        InvalidEdge(
+                            source=edge.source,
+                            target=edge.target,
+                            reason="The connected handles carry incompatible data types.",
+                        )
+                    )
 
-    is_valid = not required_missing and not unsupported and not duplicates and not feedback and not invalid_edges and len(nodes) >= len(CANONICAL_CORE)
+    normalized_pipeline = [label for label in detected_order if label in label_counts]
+
+    is_valid = not required_missing and not unsupported and not duplicates and not feedback and not invalid_edges and len(nodes) >= len(required_components)
 
     if is_valid:
         feedback.append("Pipeline is valid and ready to simulate.")

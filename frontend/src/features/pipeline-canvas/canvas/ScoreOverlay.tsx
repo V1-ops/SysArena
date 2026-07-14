@@ -28,7 +28,9 @@ export function ScoreOverlay() {
         <div className="mt-4 rounded-lg border border-[#66FCF1]/10 bg-[#0B0C10] p-3">
           <div className="mb-3 flex items-center gap-2">
             <Trophy className="h-4 w-4 text-[#66FCF1]" />
-            <p className="text-sm text-white">Rank #{response.leaderboardRank}</p>
+            <p className="text-sm text-white">
+              {response.leaderboardRank > 0 ? `Rank #${response.leaderboardRank}` : "Score recorded"}
+            </p>
           </div>
           <div className="space-y-2">
             {Object.entries(response.score.metrics).map(([label, value]) => (
