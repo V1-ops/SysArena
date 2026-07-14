@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Boxes, GitBranch, Workflow } from "lucide-react";
 import { EventLog } from "./canvas/EventLog";
+import { AgentControlRoom } from "./canvas/AgentControlRoom";
 import { NodePalette } from "./canvas/NodePalette";
 import { PipelineCanvas } from "./canvas/PipelineCanvas";
 import { PropertiesPanel } from "./canvas/PropertiesPanel";
@@ -85,7 +86,7 @@ function CanvasSimulationInner({
         </div>
       </header>
 
-      <section className="grid min-h-0 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+      <section className={`grid min-h-0 gap-5 ${config.id === "agent-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_420px]" : "xl:grid-cols-[300px_minmax(0,1fr)_340px]"}`}>
         <NodePalette />
 
         <div className="min-w-0 space-y-4">
@@ -101,12 +102,16 @@ function CanvasSimulationInner({
           <PipelineCanvas />
         </div>
 
-        <div className="space-y-5">
-          <PropertiesPanel />
-          <EventLog />
-          <ScoreOverlay />
-          <SubmitPanel />
-        </div>
+        {config.id === "agent-builder" ? (
+          <AgentControlRoom />
+        ) : (
+          <div className="space-y-5">
+            <PropertiesPanel />
+            <EventLog />
+            <ScoreOverlay />
+            <SubmitPanel />
+          </div>
+        )}
       </section>
     </div>
   );

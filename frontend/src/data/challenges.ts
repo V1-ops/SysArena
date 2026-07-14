@@ -50,17 +50,17 @@ export const challenges: Challenge[] = [
     hint: "Without embeddings, your retriever has nothing meaningful to search.",
   },
   {
-    id: "agent-coder-001",
-    title: "Architect an autonomous coding assistant",
+    id: "agent-sql-001",
+    title: "Build a Text-to-SQL analyst team",
     category: "Agents",
     difficulty: "Medium",
     rewardXp: 140,
     estimatedTime: "7 min",
     summary:
-      "Design a multi-agent flow that plans, codes, tests, and reviews before shipping an answer.",
-    objectives: ["Order agents correctly", "Keep reasoning clear", "Reduce unnecessary hops"],
+      "Design a multi-agent flow that turns CSV questions into verified SQL and visual answers.",
+    objectives: ["Plan analytical intent", "Verify generated SQL", "Explain the result visually"],
     supportedComponents: ["Planner", "Researcher", "Coder", "Tester", "Reviewer"],
-    hint: "The planner should frame the mission before execution agents begin.",
+    hint: "The tester must verify the generated SQL before the reviewer explains the result.",
   },
   {
     id: "debug-rag-001",

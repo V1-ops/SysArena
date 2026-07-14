@@ -1,0 +1,13 @@
+timestamp,channel,page,device,country,sessions,conversions
+2026-01-04,Organic,Landing,Desktop,IN,420,24
+2026-01-09,Paid Search,Pricing,Mobile,US,310,19
+2026-02-02,Organic,Docs,Desktop,IN,515,31
+2026-02-16,Social,Landing,Mobile,GB,275,12
+2026-03-05,Paid Search,Pricing,Desktop,US,460,34
+2026-03-22,Email,Checkout,Mobile,IN,390,42
+2026-04-03,Organic,Landing,Desktop,DE,580,39
+2026-04-19,Social,Docs,Mobile,GB,330,16
+2026-05-07,Email,Pricing,Desktop,IN,445,47
+2026-05-25,Paid Search,Landing,Mobile,US,510,29
+2026-06-08,Organic,Checkout,Desktop,IN,625,58
+2026-06-20,Social,Pricing,Mobile,DE,360,21

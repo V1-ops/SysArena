@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import build, challenges, rag
+from app.api.routes import agents, build, challenges, rag
 
 app = FastAPI(title="EngineerVerse API")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 app.include_router(challenges.router, prefix="/api")
 app.include_router(build.router, prefix="/api")
 app.include_router(rag.router, prefix="/api")
+app.include_router(agents.router, prefix="/api")
 
 
 @app.get("/health")
