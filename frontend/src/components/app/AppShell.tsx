@@ -35,7 +35,7 @@ function SidebarContent({ expanded, isPinned, onTogglePin, onNavigate, activeCha
             : label === "Challenges"
               ? pathname === "/challenges" || pathname.startsWith("/challenge/") || pathname.startsWith("/build/") || pathname.startsWith("/simulate/") || pathname.startsWith("/result/")
               : label === "Optimizers"
-                ? pathname === "/optimizers" || pathname.startsWith("/optimize/")
+                ? pathname === "/optimizers" || pathname.startsWith("/optimizer/") || pathname.startsWith("/physics-optimizer/")
                 : pathname === "/profile";
 
           return (

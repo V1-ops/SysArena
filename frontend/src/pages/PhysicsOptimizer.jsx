@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import p5 from "p5";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
+import { setActiveChallenge } from "../lib/challenge-session";
 
 const WIDTH = 860;
 const HEIGHT = 470;
@@ -85,6 +86,8 @@ export default function PhysicsOptimizer() {
   const [currentRate, setCurrentRate] = useState(0.3);
   const [switches, setSwitches] = useState([]);
   const [message, setMessage] = useState("Choose a strategy and launch.");
+
+  useEffect(() => { setActiveChallenge("physics-optimizer-001"); }, []);
 
   useEffect(() => { manualRateRef.current = manualRate; }, [manualRate]);
   useEffect(() => {

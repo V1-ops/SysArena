@@ -3,6 +3,7 @@ import p5 from "p5";
 import { ArrowLeft, Crosshair, Play, RotateCcw, Target, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
+import { setActiveChallenge } from "../lib/challenge-session";
 
 type GameMode = "manual" | "grid";
 type ObjectiveId = "sphere" | "ellipse" | "rotated";
@@ -29,6 +30,8 @@ export function OptimizerChallengePage() {
   const [mode, setMode] = useState<GameMode>("manual"); const [manualRate, setManualRate] = useState(0.1);
   const [gridRates, setGridRates] = useState([0.01, 0.1, 0.5]); const [message, setMessage] = useState("Choose a learning rate, then run the optimizer.");
   const [running, setRunning] = useState(false); const [lastStep, setLastStep] = useState(0); const [weights, setWeights] = useState<WeightSnapshot[]>([]);
+
+  useEffect(() => { setActiveChallenge("optimizer-gradient-001"); }, []);
 
   useEffect(() => { configRef.current = { mode, objective, manual: manualRate, grid: gridRates }; }, [mode, objective, manualRate, gridRates]);
 

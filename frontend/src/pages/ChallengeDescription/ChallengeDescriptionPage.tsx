@@ -91,13 +91,9 @@ export function ChallengeDescriptionPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">
-<<<<<<< HEAD
-                <Link to={getChallengeStartPath(challenge)}>Start Building</Link>
-=======
-                <Link to={isPhysicsOptimizer ? `/physics-optimizer/${challenge.id}` : isOptimizer ? `/optimizer/${challenge.id}` : `/build/${challenge.id}`}>
+                <Link to={getChallengeStartPath(challenge)}>
                   {isPhysicsOptimizer ? "Launch Physics Game" : isOptimizer ? "Enter Optimizer Dojo" : "Start Building"}
                 </Link>
->>>>>>> origin/main
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link to="/challenges">Back to Challenges</Link>

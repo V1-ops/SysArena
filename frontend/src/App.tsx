@@ -7,13 +7,10 @@ import { BuilderPage } from "./pages/DragDropBuilder/BuilderPage";
 import { SimulationPage } from "./pages/Simulation/SimulationPage";
 import { ResultPage } from "./pages/ScoreResult/ResultPage";
 import { ProfilePage } from "./pages/Profile/ProfilePage";
-<<<<<<< HEAD
 import { OptimizersPage } from "./pages/Optimizers/OptimizersPage";
-=======
 import { OptimizerChallengePage } from "./pages/OptimizerChallengePage";
 // @ts-ignore The parallel p5 mini-game is intentionally kept as a plain JSX module.
 import PhysicsOptimizer from "./pages/PhysicsOptimizer.jsx";
->>>>>>> origin/main
 
 export default function App() {
   return (

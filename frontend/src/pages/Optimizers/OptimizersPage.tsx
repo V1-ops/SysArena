@@ -7,10 +7,12 @@ import { ChallengeCard } from "../../components/cards/ChallengeCard";
 import { ChallengePreviewDrawer } from "../../components/challenges/ChallengePreviewDrawer";
 import { challenges } from "../../data/challenges";
 import type { Challenge } from "../../types";
+import { getChallengeStartPath } from "../../lib/challenge-routing";
 
 export function OptimizersPage() {
   const [preview, setPreview] = useState<Challenge | null>(null);
-  const optimizer = challenges.find((challenge) => challenge.category === "Optimize") ?? challenges[0];
+  const optimizerChallenges = challenges.filter((challenge) => challenge.category === "Optimize");
+  const optimizer = optimizerChallenges[0] ?? challenges[0];
 
   return (
     <div className="space-y-8 pb-8">
@@ -21,7 +23,7 @@ export function OptimizersPage() {
           <h1 className="mt-5 text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">Tune the system until the curve changes.</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-[#C5C6C7]/68">Optimizers are focused experiments for understanding speed, cost, convergence, and the tradeoffs behind better systems.</p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button asChild size="lg"><Link to={`/build/${optimizer.id}`}>Open optimizer <ArrowRight className="h-4 w-4" /></Link></Button>
+            <Button asChild size="lg"><Link to={getChallengeStartPath(optimizer)}>Open optimizer <ArrowRight className="h-4 w-4" /></Link></Button>
             <Button asChild size="lg" variant="outline"><Link to="/challenges">Browse all challenges</Link></Button>
           </div>
         </div>
@@ -32,7 +34,7 @@ export function OptimizersPage() {
 
       <section className="space-y-4">
         <div><p className="text-xs uppercase tracking-[0.2em] text-[#45A29E]">Optimizer missions</p><h2 className="mt-2 text-2xl font-semibold text-white">Specialized challenges for performance thinking.</h2></div>
-        <div className="max-w-md"><ChallengeCard challenge={optimizer} onPreview={setPreview} /></div>
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{optimizerChallenges.map((challenge) => <ChallengeCard key={challenge.id} challenge={challenge} onPreview={setPreview} />)}</div>
       </section>
 
       <ChallengePreviewDrawer challenge={preview} onClose={() => setPreview(null)} />
