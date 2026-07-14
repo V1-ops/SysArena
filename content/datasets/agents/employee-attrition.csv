@@ -1,0 +1,13 @@
+department,role,age,years_at_company,monthly_income,job_satisfaction,attrition
+Engineering,Developer,29,3,7200,4,No
+Engineering,Developer,34,6,9100,3,No
+Engineering,Manager,41,11,12800,4,No
+Sales,Executive,27,2,5400,2,Yes
+Sales,Executive,31,4,6100,3,No
+Sales,Manager,39,9,10400,4,No
+HR,Specialist,28,3,4800,3,Yes
+HR,Manager,45,13,9900,4,No
+Finance,Analyst,30,5,6800,4,No
+Finance,Analyst,36,8,7900,2,Yes
+Finance,Manager,43,12,11600,4,No
+Engineering,QA Engineer,33,5,6500,3,No

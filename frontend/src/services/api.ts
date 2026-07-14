@@ -4,6 +4,8 @@ import {
   ChallengeDetail,
   ChallengeSummary,
   RagRunResponse,
+  AgentRunResponse,
+  AgentDataset,
   ValidateBuildResponse,
 } from "../types";
 
@@ -57,4 +59,31 @@ export function runRagChallenge(
     method: "POST",
     body: JSON.stringify({ challengeId, nodes, edges, query, runMode: "scored" }),
   });
+}
+
+export function validateAgentBuild(challengeId: string, nodes: BuildNode[], edges: BuildEdge[]) {
+  return request<ValidateBuildResponse>("/agent/validate", {
+    method: "POST",
+    body: JSON.stringify({ challengeId, nodes, edges }),
+  });
+}
+
+export function runAgentChallenge(
+  challengeId: string,
+  nodes: BuildNode[],
+  edges: BuildEdge[],
+  input: { datasetId?: string; documentName?: string; documentText?: string; schemaHint?: string; query: string }
+) {
+  return request<AgentRunResponse>("/agent/run", {
+    method: "POST",
+    body: JSON.stringify({ challengeId, nodes, edges, input, runMode: "scored" }),
+  });
+}
+
+export function fetchAgentDatasets() {
+  return request<AgentDataset[]>("/agent/datasets");
+}
+
+export function fetchAgentDataset(datasetId: string) {
+  return request<AgentDataset>(`/agent/datasets/${datasetId}`);
 }

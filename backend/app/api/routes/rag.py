@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.rag import RagRunRequest, RagRunResponse
 from app.services.challenge_loader import load_challenge
-from app.services.rag_engine import run_rag_pipeline
 from app.services.validation_engine import validate_pipeline
 
 router = APIRouter(tags=["rag"])
@@ -25,6 +24,8 @@ def run_rag(payload: RagRunRequest):
         )
 
     try:
+        from app.services.rag_engine import run_rag_pipeline
+
         return run_rag_pipeline(
             challenge=challenge,
             nodes=payload.nodes,
