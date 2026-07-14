@@ -1,14 +1,85 @@
 import { FileUp, Play, RotateCcw, Send } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useGraphStore } from "../hooks/useGraphStore";
 import { useSimulationTrace } from "../hooks/useSimulationTrace";
 import { serializeGraph } from "../services/serializeGraph";
 import { submitPipeline } from "../services/submitPipeline";
+import { saveRagBuild, saveRagRun } from "../../../lib/rag-session";
+import { runRagChallenge, validateBuild } from "../../../services/api";
+import type { BuildEdge, BuildNode, RagRunResponse } from "../../../types";
+import type { SimulationTraceStep, SubmitPipelineResponse } from "../types/graph.types";
+
+function toBuildNodes(nodeIds: string[], configNodes: ReturnType<typeof useGraphStore.getState>["config"]["nodeRegistry"]): BuildNode[] {
+  return nodeIds
+    .map((nodeId) => {
+      const node = useGraphStore.getState().nodes.find((item) => item.id === nodeId);
+      const nodeDef = node ? configNodes.find((item) => item.id === node.data.nodeTypeId) : undefined;
+      if (!node || !nodeDef) {
+        return null;
+      }
+      return {
+        id: node.id,
+        type: node.data.nodeTypeId,
+        label: nodeDef.label,
+      };
+    })
+    .filter((item): item is BuildNode => Boolean(item));
+}
+
+function toBuildEdges(edges: ReturnType<typeof useGraphStore.getState>["edges"]): BuildEdge[] {
+  return edges.map((edge) => ({
+    source: edge.source,
+    target: edge.target,
+  }));
+}
+
+function toSimulationTrace(run: RagRunResponse, buildNodes: BuildNode[]): SimulationTraceStep[] {
+  const labelToNodeId = new Map(buildNodes.map((node) => [node.label, node.id]));
+  const trace: SimulationTraceStep[] = [];
+
+  for (const event of run.simulationTimeline) {
+    const nodeId = labelToNodeId.get(event.label);
+    if (!nodeId) {
+      continue;
+    }
+
+    trace.push({
+      nodeId,
+      status: event.status === "completed" ? "success" : "error",
+      timestampMs: event.startedAtOffsetMs,
+      durationMs: event.durationMs,
+      activeMessage: `Running ${event.label}.`,
+      completedMessage: `${event.label} completed.`,
+    });
+  }
+
+  return trace;
+}
+
+function toOverlayResponse(run: RagRunResponse): SubmitPipelineResponse {
+  const overallPoints = run.scoreBreakdown.reduce((sum, item) => sum + item.score, 0);
+  const overallMax = run.scoreBreakdown.reduce((sum, item) => sum + item.maxScore, 0) || 100;
+
+  return {
+    submissionId: run.runId,
+    status: run.status === "completed" ? "completed" : "running",
+    score: {
+      overall: overallPoints / overallMax,
+      metrics: Object.fromEntries(
+        run.scoreBreakdown.map((item) => [item.label, item.maxScore ? item.score / item.maxScore : 0])
+      ),
+    },
+    trace: [],
+    leaderboardRank: Math.max(1, Math.round((overallMax - overallPoints) / 5) + 1),
+  };
+}
 
 export function SubmitPanel() {
   const [documentName, setDocumentName] = useState("");
   const [documentText, setDocumentText] = useState("");
   const [query, setQuery] = useState("What are the most relevant policy details?");
+  const navigate = useNavigate();
   const config = useGraphStore((state) => state.config);
   const nodes = useGraphStore((state) => state.nodes);
   const edges = useGraphStore((state) => state.edges);
@@ -45,11 +116,46 @@ export function SubmitPanel() {
       setRunState("submitting");
       setErrorMessage(null);
       clearEventLog();
-      const payload = serializeGraph(nodes, edges, config, "demo-user", isRag ? {
-        documentName,
-        documentText,
-        query,
-      } : undefined);
+      const payload = serializeGraph(
+        nodes,
+        edges,
+        config,
+        "demo-user",
+        isRag
+          ? {
+              documentName,
+              documentText,
+              query,
+            }
+          : undefined
+      );
+
+      if (isRag) {
+        const buildNodes = toBuildNodes(
+          nodes.map((node) => node.id),
+          config.nodeRegistry
+        );
+        const buildEdges = toBuildEdges(edges);
+        const validation = await validateBuild(config.challengeMeta.challengeId, buildNodes, buildEdges);
+
+        if (!validation.isValid) {
+          setRunState("error");
+          setErrorMessage(validation.feedback.join(" "));
+          return;
+        }
+
+        const run = await runRagChallenge(config.challengeMeta.challengeId, buildNodes, buildEdges, query);
+        saveRagBuild(payload);
+        saveRagRun(run);
+
+        const overlayResponse = toOverlayResponse(run);
+        const trace = toSimulationTrace(run, buildNodes);
+        setLastResponse({ ...overlayResponse, trace });
+        await runSimulationTrace(trace);
+        navigate(`/result/${config.challengeMeta.challengeId}`);
+        return;
+      }
+
       const response = await submitPipeline(payload);
       setLastResponse(response);
       await runSimulationTrace(response.trace);

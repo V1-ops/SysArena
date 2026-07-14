@@ -9,21 +9,42 @@ import { ScoreOverlay } from "./canvas/ScoreOverlay";
 import { SubmitPanel } from "./canvas/SubmitPanel";
 import { gameModeConfigs, type GameModeId } from "./config";
 import { useGraphStore } from "./hooks/useGraphStore";
+import type { GameModeConfig } from "./types/config.types";
 
 interface CanvasSimulationExperienceProps {
   initialModeId?: GameModeId;
+  challengeMetaOverride?: Partial<GameModeConfig["challengeMeta"]>;
 }
 
-function CanvasSimulationInner({ initialModeId = "rag-builder" }: CanvasSimulationExperienceProps) {
+function CanvasSimulationInner({
+  initialModeId = "rag-builder",
+  challengeMetaOverride,
+}: CanvasSimulationExperienceProps) {
   const config = useGraphStore((state) => state.config);
   const setConfig = useGraphStore((state) => state.setConfig);
 
   useEffect(() => {
-    const nextConfig = gameModeConfigs.find((item) => item.id === initialModeId) ?? gameModeConfigs[0];
-    if (nextConfig.id !== config.id) {
+    const baseConfig = gameModeConfigs.find((item) => item.id === initialModeId) ?? gameModeConfigs[0];
+    const nextConfig = challengeMetaOverride
+      ? {
+          ...baseConfig,
+          challengeMeta: {
+            ...baseConfig.challengeMeta,
+            ...challengeMetaOverride,
+          },
+        }
+      : baseConfig;
+
+    const hasChanged =
+      nextConfig.id !== config.id ||
+      nextConfig.challengeMeta.challengeId !== config.challengeMeta.challengeId ||
+      nextConfig.challengeMeta.title !== config.challengeMeta.title ||
+      nextConfig.challengeMeta.description !== config.challengeMeta.description;
+
+    if (hasChanged) {
       setConfig(nextConfig);
     }
-  }, [config.id, initialModeId, setConfig]);
+  }, [challengeMetaOverride, config, initialModeId, setConfig]);
 
   return (
     <div className="space-y-5">

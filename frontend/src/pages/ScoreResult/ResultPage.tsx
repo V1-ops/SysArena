@@ -1,10 +1,11 @@
 import { ArrowRight, Home, RotateCcw, Sparkles, Trophy } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { challenges } from "../../data/challenges";
+import { loadRagRun } from "../../lib/rag-session";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 
-const breakdown = [
+const fallbackBreakdown = [
   { label: "Architecture", score: 92 },
   { label: "Reliability", score: 95 },
   { label: "Latency", score: 84 },
@@ -14,6 +15,35 @@ const breakdown = [
 export function ResultPage() {
   const { challengeId } = useParams();
   const challenge = challenges.find((item) => item.id === challengeId) ?? challenges[0];
+  const ragRun = challenge.category === "RAG" ? loadRagRun() : null;
+  const totalScore = ragRun
+    ? ragRun.scoreBreakdown.reduce((sum, item) => sum + item.score, 0)
+    : 91;
+  const totalMax = ragRun
+    ? ragRun.scoreBreakdown.reduce((sum, item) => sum + item.maxScore, 0)
+    : 100;
+  const breakdownItems = ragRun
+    ? ragRun.scoreBreakdown.map((item) => ({
+        label: item.label,
+        score: item.maxScore ? Math.round((item.score / item.maxScore) * 100) : 0,
+      }))
+    : fallbackBreakdown;
+  const feedback = ragRun
+    ? [
+        `Positive: ${ragRun.judgeFeedback.positive}`,
+        `Weakness: ${ragRun.judgeFeedback.weakness}`,
+        `Next step: ${ragRun.judgeFeedback.nextStep}`,
+      ]
+    : [
+        "Strong use of queueing to protect message delivery under load.",
+        "Redis could be integrated more explicitly to reduce repeat read latency.",
+        "Next step: connect cache closer to the chat service for faster status lookups.",
+      ];
+  const recommendations = ragRun?.judgeFeedback.recommendations ?? [
+    "Add cache",
+    "Improve ordering under burst load",
+    "Reduce cross-service dependency in hot paths",
+  ];
 
   return (
     <div className="space-y-8">
@@ -24,10 +54,15 @@ export function ResultPage() {
               <Sparkles className="h-4 w-4" />
               Challenge Complete
             </div>
-            <h1 className="text-5xl font-semibold tracking-tight text-white">91 / 100</h1>
-            <p className="text-lg text-[#45A29E]">Badge Unlocked: Messaging Architect</p>
+            <h1 className="text-5xl font-semibold tracking-tight text-white">
+              {totalScore} / {totalMax}
+            </h1>
+            <p className="text-lg text-[#45A29E]">
+              Badge Unlocked: {challenge.category === "RAG" ? "RAG Builder" : "Messaging Architect"}
+            </p>
             <p className="max-w-2xl text-base leading-7 text-[#C5C6C7]/65">
-              Strong architecture overall. You balanced delivery reliability and speed well, with a clear service path.
+              {ragRun?.judgeFeedback.positive ??
+                "Strong architecture overall. You balanced delivery reliability and speed well, with a clear service path."}
             </p>
           </div>
           <div className="flex items-center justify-center">
@@ -42,7 +77,7 @@ export function ResultPage() {
         <Card>
           <CardContent className="space-y-5 p-6">
             <h2 className="text-2xl font-semibold text-white">Breakdown</h2>
-            {breakdown.map((item) => (
+            {breakdownItems.map((item) => (
               <div key={item.label} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-[#C5C6C7]/70">{item.label}</span>
@@ -64,18 +99,18 @@ export function ResultPage() {
             <div>
               <h2 className="text-2xl font-semibold text-white">AI Judge Feedback</h2>
               <div className="mt-4 space-y-3 text-sm leading-6 text-[#C5C6C7]/70">
-                <p>✔ Strong use of queueing to protect message delivery under load.</p>
-                <p>✖ Redis could be integrated more explicitly to reduce repeat read latency.</p>
-                <p>➜ Next step: connect cache closer to the chat service for faster status lookups.</p>
+                {feedback.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
               </div>
             </div>
 
             <div className="rounded-2xl border border-white/5 bg-[#0F151B] p-4">
               <p className="text-sm font-medium text-white">Recommendations</p>
               <ul className="mt-3 space-y-2 text-sm text-[#C5C6C7]/65">
-                <li>- Add cache</li>
-                <li>- Improve ordering under burst load</li>
-                <li>- Reduce cross-service dependency in hot paths</li>
+                {recommendations.map((item) => (
+                  <li key={item}>- {item}</li>
+                ))}
               </ul>
             </div>
 

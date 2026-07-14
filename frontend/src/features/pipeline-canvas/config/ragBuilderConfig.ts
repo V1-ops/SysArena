@@ -34,7 +34,7 @@ export const ragBuilderConfig: GameModeConfig = {
     },
     {
       id: "chunker",
-      label: "Chunker",
+      label: "Recursive Text Splitting",
       category: "ingestion",
       description: "Splits documents into retrievable chunks.",
       icon: "Scissors",
@@ -47,7 +47,7 @@ export const ragBuilderConfig: GameModeConfig = {
     },
     {
       id: "embedder",
-      label: "Embedder",
+      label: "Embeddings",
       category: "indexing",
       description: "Converts chunks into semantic vectors.",
       icon: "Binary",
@@ -59,7 +59,7 @@ export const ragBuilderConfig: GameModeConfig = {
     },
     {
       id: "vector-db",
-      label: "Vector DB",
+      label: "FAISS Vector Store",
       category: "indexing",
       description: "Stores vectors for approximate nearest-neighbor search.",
       icon: "Database",
@@ -71,7 +71,7 @@ export const ragBuilderConfig: GameModeConfig = {
     },
     {
       id: "retriever",
-      label: "Retriever",
+      label: "Dense Retriever",
       category: "retrieval",
       description: "Finds relevant chunks for a user query.",
       icon: "Search",
@@ -83,12 +83,39 @@ export const ragBuilderConfig: GameModeConfig = {
       ],
     },
     {
+      id: "reranker",
+      label: "Reranker",
+      category: "retrieval",
+      description: "Reorders retrieved chunks to improve answer precision before prompting.",
+      icon: "ListChecks",
+      inputs: [{ id: "context", label: "Context", dataType: "context" }],
+      outputs: [{ id: "reranked-context", label: "Reranked Context", dataType: "context" }],
+      configFields: [
+        { name: "strategy", label: "Strategy", type: "select", options: ["Cross Encoder", "Lexical Hybrid"], default: "Cross Encoder" },
+      ],
+    },
+    {
+      id: "prompt-template",
+      label: "Prompt Template",
+      category: "generation",
+      description: "Formats the retrieved context and user question into a structured prompt.",
+      icon: "FileText",
+      inputs: [{ id: "context", label: "Context", dataType: "context" }],
+      outputs: [{ id: "prompt", label: "Prompt", dataType: "prompt" }],
+      configFields: [
+        { name: "style", label: "Template Style", type: "select", options: ["Structured QA", "Policy Answer"], default: "Structured QA" },
+      ],
+    },
+    {
       id: "llm",
-      label: "LLM Answer",
+      label: "LLM",
       category: "generation",
       description: "Generates the final grounded answer.",
       icon: "Sparkles",
-      inputs: [{ id: "context", label: "Context", dataType: "context" }],
+      inputs: [
+        { id: "context", label: "Context", dataType: "context" },
+        { id: "prompt", label: "Prompt", dataType: "prompt" },
+      ],
       outputs: [{ id: "answer", label: "Answer", dataType: "answer" }],
       configFields: [
         { name: "model", label: "Model", type: "select", options: ["gpt-4.1-mini", "gpt-4.1"], default: "gpt-4.1-mini" },
@@ -99,7 +126,7 @@ export const ragBuilderConfig: GameModeConfig = {
   connectionRules: {
     ingestion: ["ingestion", "indexing"],
     indexing: ["indexing", "retrieval"],
-    retrieval: ["generation"],
+    retrieval: ["retrieval", "generation"],
     generation: [],
   },
   canvasSettings: {
@@ -112,9 +139,9 @@ export const ragBuilderConfig: GameModeConfig = {
   },
   challengeMeta: {
     challengeId: "university-rag-001",
-    title: "Build a RAG assistant for a university handbook",
-    description: "Assemble a retrieval pipeline that answers policy questions from source documents.",
-    allowedNodeTypeIds: ["pdf-loader", "chunker", "embedder", "vector-db", "retriever", "llm"],
+    title: "Build a RAG assistant for Business Basics",
+    description: "Assemble a PDF-based RAG pipeline that answers business basics questions from the provided document.",
+    allowedNodeTypeIds: ["pdf-loader", "chunker", "embedder", "vector-db", "retriever", "reranker", "prompt-template", "llm"],
     maxNodes: 8,
     timeLimitSeconds: 360,
   },
