@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Boxes, GitBranch, Workflow } from "lucide-react";
+import { ArrowLeft, GitBranch, Workflow } from "lucide-react";
+import { Link } from "react-router-dom";
 import { EventLog } from "./canvas/EventLog";
 import { AgentControlRoom } from "./canvas/AgentControlRoom";
 import { NodePalette } from "./canvas/NodePalette";
@@ -50,13 +51,16 @@ function CanvasSimulationInner({
   return (
     <div className="space-y-5">
       <header className="rounded-lg border border-white/8 bg-[#101820]/88 px-5 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-start gap-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#66FCF1]/20 bg-[#0B0C10] shadow-[0_0_30px_rgba(102,252,241,0.16)]">
               <Workflow className="h-6 w-6 text-[#66FCF1]" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-[#45A29E]">EngineerVerse Canvas</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#45A29E]">Active challenge</p>
+                <span className="rounded-full border border-[#66FCF1]/20 bg-[#66FCF1]/8 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-[#66FCF1]">Locked to route</span>
+              </div>
               <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white md:text-3xl">
                 {config.challengeMeta.title}
               </h1>
@@ -66,22 +70,11 @@ function CanvasSimulationInner({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {gameModeConfigs.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setConfig(item)}
-                className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${
-                  item.id === config.id
-                    ? "border-[#66FCF1]/50 bg-[#66FCF1]/12 text-white"
-                    : "border-white/10 bg-[#0B0C10] text-[#C5C6C7]/72 hover:border-[#66FCF1]/35 hover:text-white"
-                }`}
-              >
-                <Boxes className="h-4 w-4" />
-                {item.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/challenges" className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-[#0B0C10] px-3 py-2 text-sm text-[#C5C6C7]/72 transition hover:border-[#66FCF1]/35 hover:text-white">
+              <ArrowLeft className="h-4 w-4" />
+              Change challenge
+            </Link>
           </div>
         </div>
       </header>

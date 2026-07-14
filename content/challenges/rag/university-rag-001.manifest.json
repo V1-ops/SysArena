@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "id": "university-rag-001",
+  "category": "rag",
+  "title": "Build a RAG assistant for a university handbook",
+  "difficulty": "Easy",
+  "rewardXp": 120,
+  "estimatedTime": "8 min",
+  "summary": "Assemble a document retrieval pipeline that answers university policy questions with grounded context.",
+  "objectives": ["Load documents", "Index embeddings", "Retrieve relevant chunks"],
+  "supportedComponents": ["PDF Loader", "Recursive Text Splitting", "Embeddings", "FAISS Vector Store", "Dense Retriever", "LLM"],
+  "hint": "Without embeddings, your retriever has nothing meaningful to search.",
+  "scoringDimensions": [{"label": "Architecture correctness", "weight": 60}, {"label": "Retrieval readiness", "weight": 40}],
+  "validationRules": {"requiredCore": ["PDF Loader", "Recursive Text Splitting", "Embeddings", "FAISS Vector Store", "Dense Retriever", "LLM"], "optionalComponents": ["Reranker", "Prompt Template"], "singlePipeline": true},
+  "surface": "builder",
+  "gameModeId": "rag-builder",
+  "allowedNodeTypeIds": ["pdf-loader", "chunker", "embedder", "vector-db", "retriever", "reranker", "prompt-template", "llm"],
+  "maxNodes": 8,
+  "timeLimitSeconds": 360
+}

@@ -1,0 +1,19 @@
+{
+  "manifestVersion": 1,
+  "id": "optimizer-ann-001",
+  "category": "optimization",
+  "title": "Compare optimizers on a small ANN",
+  "difficulty": "Medium",
+  "rewardXp": 160,
+  "estimatedTime": "9 min",
+  "summary": "Compare optimizer behavior over training epochs while keeping the model and data fixed.",
+  "objectives": ["Compare convergence", "Understand learning-rate effects", "Interpret training curves"],
+  "supportedComponents": ["SGD", "Momentum", "RMSprop", "Adam"],
+  "hint": "The fairest comparison starts every optimizer from identical initial weights.",
+  "scoringDimensions": [{"label": "Experiment completion", "weight": 100}],
+  "validationRules": {"competitiveLeaderboard": false, "deterministicReplay": true},
+  "surface": "optimizer",
+  "gameModeId": "optimizer-lab",
+  "allowedNodeTypeIds": [],
+  "timeLimitSeconds": 540
+}

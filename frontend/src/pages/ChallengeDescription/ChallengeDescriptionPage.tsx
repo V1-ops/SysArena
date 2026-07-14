@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { challenges } from "../../data/challenges";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { getChallengeStartPath } from "../../lib/challenge-routing";
 
 export function ChallengeDescriptionPage() {
   const { challengeId } = useParams();
@@ -88,7 +89,7 @@ export function ChallengeDescriptionPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">
-                <Link to={`/build/${challenge.id}`}>Start Building</Link>
+                <Link to={getChallengeStartPath(challenge)}>Start Building</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link to="/challenges">Back to Challenges</Link>
