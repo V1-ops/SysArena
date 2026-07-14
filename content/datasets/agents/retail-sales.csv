@@ -1,0 +1,13 @@
+date,region,category,product,units_sold,unit_price
+2026-01-05,North,Electronics,Keyboard,4,45.00
+2026-01-12,South,Home,Desk Lamp,6,28.00
+2026-02-03,North,Electronics,Mouse,8,22.00
+2026-02-18,West,Home,Notebook,12,9.00
+2026-03-01,North,Electronics,Monitor,3,210.00
+2026-03-11,South,Home,Chair,2,120.00
+2026-04-06,North,Electronics,Keyboard,5,45.00
+2026-04-22,West,Home,Desk Lamp,7,28.00
+2026-05-08,East,Electronics,Headphones,9,75.00
+2026-05-19,North,Home,Chair,3,120.00
+2026-06-02,South,Electronics,Monitor,4,210.00
+2026-06-21,East,Home,Notebook,15,9.00

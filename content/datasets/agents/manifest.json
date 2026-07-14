@@ -1,0 +1,86 @@
+{
+  "datasets": [
+    {
+      "id": "retail-sales",
+      "name": "Retail Sales",
+      "file": "retail-sales.csv",
+      "description": "Store transactions for revenue, category, regional, product, and monthly analysis.",
+      "sampleQueries": [
+        "What was total revenue by category?",
+        "Show the top 3 products by revenue.",
+        "What were monthly sales in the North region?"
+      ],
+      "columns": [
+        { "name": "date", "type": "DATE" },
+        { "name": "region", "type": "TEXT" },
+        { "name": "category", "type": "TEXT" },
+        { "name": "product", "type": "TEXT" },
+        { "name": "units_sold", "type": "INTEGER" },
+        { "name": "unit_price", "type": "REAL" }
+      ],
+      "metricAliases": { "revenue": "units_sold * unit_price", "sales": "units_sold * unit_price" }
+    },
+    {
+      "id": "employee-attrition",
+      "name": "Employee Attrition",
+      "file": "employee-attrition.csv",
+      "description": "People analytics records for department, satisfaction, salary, and attrition questions.",
+      "sampleQueries": [
+        "How many employees left by department?",
+        "What is the average monthly income by department?",
+        "Show the average job satisfaction by role."
+      ],
+      "columns": [
+        { "name": "department", "type": "TEXT" },
+        { "name": "role", "type": "TEXT" },
+        { "name": "age", "type": "INTEGER" },
+        { "name": "years_at_company", "type": "INTEGER" },
+        { "name": "monthly_income", "type": "REAL" },
+        { "name": "job_satisfaction", "type": "INTEGER" },
+        { "name": "attrition", "type": "TEXT" }
+      ],
+      "metricAliases": {}
+    },
+    {
+      "id": "movie-ratings",
+      "name": "Movie Ratings",
+      "file": "movie-ratings.csv",
+      "description": "Movie performance data for rating, genre, release-year, votes, and box-office analysis.",
+      "sampleQueries": [
+        "What is the average rating by genre?",
+        "Show the top 3 movies by box office.",
+        "How many movies were released each year?"
+      ],
+      "columns": [
+        { "name": "title", "type": "TEXT" },
+        { "name": "genre", "type": "TEXT" },
+        { "name": "release_year", "type": "INTEGER" },
+        { "name": "rating", "type": "REAL" },
+        { "name": "votes", "type": "INTEGER" },
+        { "name": "box_office", "type": "REAL" }
+      ],
+      "metricAliases": {}
+    },
+    {
+      "id": "web-events",
+      "name": "Web Events",
+      "file": "web-events.csv",
+      "description": "Website traffic and conversion events for channel, device, country, and monthly analysis.",
+      "sampleQueries": [
+        "What were total conversions by channel?",
+        "Show sessions by device.",
+        "What was the monthly conversion total?"
+      ],
+      "columns": [
+        { "name": "timestamp", "type": "DATE" },
+        { "name": "channel", "type": "TEXT" },
+        { "name": "page", "type": "TEXT" },
+        { "name": "device", "type": "TEXT" },
+        { "name": "country", "type": "TEXT" },
+        { "name": "sessions", "type": "INTEGER" },
+        { "name": "conversions", "type": "INTEGER" }
+      ],
+      "metricAliases": {}
+    }
+  ]
+}

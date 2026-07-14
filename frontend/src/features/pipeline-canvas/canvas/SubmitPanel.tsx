@@ -15,16 +15,16 @@ function toBuildNodes(
   configNodes: ReturnType<typeof useGraphStore.getState>["config"]["nodeRegistry"]
 ): BuildNode[] {
   return nodes.flatMap((node) => {
-      const nodeDef = configNodes.find((item) => item.id === node.data.nodeTypeId);
-      if (!nodeDef) return [];
+    const nodeDef = configNodes.find((item) => item.id === node.data.nodeTypeId);
+    if (!nodeDef) return [];
 
-      return [{
-        id: node.id,
-        type: node.data.nodeTypeId,
-        label: nodeDef.label,
-        values: node.data.values,
-      }];
-    });
+    return [{
+      id: node.id,
+      type: node.data.nodeTypeId,
+      label: nodeDef.label,
+      values: node.data.values,
+    }];
+  });
 }
 
 function toBuildEdges(edges: ReturnType<typeof useGraphStore.getState>["edges"]): BuildEdge[] {

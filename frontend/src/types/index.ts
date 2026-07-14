@@ -62,6 +62,76 @@ export interface BuildEdge {
   targetHandle?: string | null;
 }
 
+export interface AgentDatasetColumn {
+  name: string;
+  type: string;
+}
+
+export interface AgentDataset {
+  id: string;
+  name: string;
+  file?: string;
+  description: string;
+  rowCount: number;
+  sampleQueries: string[];
+  columns: AgentDatasetColumn[];
+  metricAliases?: Record<string, string>;
+}
+
+export interface AgentChart {
+  type: "bar" | "line" | "pie" | "metric" | string;
+  title: string;
+  xKey?: string | null;
+  yKey?: string | null;
+}
+
+export interface AgentRunResponse {
+  runId: string;
+  status: string;
+  answer: string;
+  sql: string;
+  dataset: AgentDataset;
+  schema: Array<{ name: string; type: string }>;
+  result: {
+    columns: string[];
+    rows: Array<Record<string, string | number | null>>;
+  };
+  chart: AgentChart;
+  simulationTimeline: Array<{
+    id: string;
+    type: string;
+    label: string;
+    status: string;
+    startedAtOffsetMs: number;
+    durationMs: number;
+    meta?: Record<string, unknown>;
+  }>;
+  transcript: Array<{
+    agent: string;
+    status: string;
+    message: string;
+    meta?: Record<string, unknown>;
+  }>;
+  metrics: {
+    latencyMs: number;
+    retryCount: number;
+    rowCount: number;
+    estimatedCost: string;
+  };
+  scoreBreakdown: Array<{ label: string; score: number; maxScore: number }>;
+  judgeFeedback: {
+    positive: string;
+    weakness: string;
+    nextStep: string;
+    recommendations: string[];
+  };
+  planArtifact: Record<string, unknown>;
+  researchArtifact: Record<string, unknown>;
+  sqlArtifact: Record<string, unknown>;
+  verificationArtifact: Record<string, unknown>;
+  reviewArtifact: Record<string, unknown>;
+}
+
 export interface InvalidEdge {
   source: string;
   target: string;

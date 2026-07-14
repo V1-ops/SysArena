@@ -17,6 +17,8 @@ export interface SubmitPipelinePayload {
   input?: {
     documentName?: string;
     documentText?: string;
+    datasetId?: string;
+    schemaHint?: string;
     query?: string;
   };
   graph: {
@@ -68,4 +70,5 @@ export interface SubmitPipelineResponse {
   };
   trace: SimulationTraceStep[];
   leaderboardRank: number;
+  agentResult?: import("../../../types").AgentRunResponse;
 }
