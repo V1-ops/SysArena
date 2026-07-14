@@ -6,6 +6,7 @@ import { EventLog } from "./canvas/EventLog";
 import { NodePalette } from "./canvas/NodePalette";
 import { PipelineCanvas } from "./canvas/PipelineCanvas";
 import { PropertiesPanel } from "./canvas/PropertiesPanel";
+import { RagMissionSidebar } from "./canvas/RagMissionSidebar";
 import { ScoreOverlay } from "./canvas/ScoreOverlay";
 import { SubmitPanel } from "./canvas/SubmitPanel";
 import { gameModeConfigs, type GameModeId } from "./config";
@@ -107,7 +108,7 @@ function CanvasSimulationInner({
         </section>
       )}
 
-      <section className={`grid min-h-0 gap-5 ${config.id === "agent-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_420px]" : "xl:grid-cols-[300px_minmax(0,1fr)_340px]"}`}>
+      <section className={`grid min-h-0 gap-5 ${config.id === "agent-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_420px]" : config.id === "rag-builder" ? "xl:grid-cols-[300px_minmax(0,1fr)_380px]" : "xl:grid-cols-[300px_minmax(0,1fr)_340px]"}`}>
         <NodePalette />
 
         <div className="min-w-0 space-y-4">
@@ -125,6 +126,8 @@ function CanvasSimulationInner({
 
         {config.id === "agent-builder" ? (
           <AgentControlRoom />
+        ) : config.id === "rag-builder" ? (
+          <RagMissionSidebar />
         ) : (
           <div className="space-y-5">
             <PropertiesPanel />

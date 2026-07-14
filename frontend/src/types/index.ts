@@ -163,7 +163,7 @@ export interface SimulationEvent {
   id: string;
   type: string;
   label: string;
-  status: string;
+  status: "completed" | "degraded" | "skipped" | "failed" | string;
   startedAtOffsetMs: number;
   durationMs: number;
   nodeId?: string | null;
@@ -192,6 +192,9 @@ export interface RagMetrics {
   chunkSize: number;
   chunkOverlap: number;
   rerankerUsed: boolean;
+  executionMode: "local" | "external";
+  embeddingModel: string;
+  generationModel: string;
 }
 
 export interface RagRunResponse {
@@ -205,4 +208,9 @@ export interface RagRunResponse {
   judgeFeedback: JudgeFeedback;
   pipelineValid?: boolean;
   validationFeedback?: string[];
+  executionDiagnostics?: {
+    degradedNodeIds: string[];
+    skippedNodeIds: string[];
+    warnings: string[];
+  };
 }

@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from app.schemas.build import BuildEdge, BuildNode
 
@@ -7,7 +9,7 @@ class RagRunRequest(BaseModel):
     challengeId: str
     nodes: list[BuildNode]
     edges: list[BuildEdge]
-    query: str
+    query: str = Field(min_length=1)
     runMode: str = "scored"
 
 
@@ -21,7 +23,7 @@ class SimulationEvent(BaseModel):
     id: str
     type: str
     label: str
-    status: str
+    status: Literal["completed", "degraded", "skipped", "failed"]
     startedAtOffsetMs: int
     durationMs: int
     nodeId: str | None = None
@@ -50,6 +52,15 @@ class RagMetrics(BaseModel):
     chunkSize: int
     chunkOverlap: int
     rerankerUsed: bool
+    executionMode: Literal["local", "external"]
+    embeddingModel: str
+    generationModel: str
+
+
+class ExecutionDiagnostics(BaseModel):
+    degradedNodeIds: list[str] = []
+    skippedNodeIds: list[str] = []
+    warnings: list[str] = []
 
 
 class RagRunResponse(BaseModel):
@@ -63,3 +74,4 @@ class RagRunResponse(BaseModel):
     judgeFeedback: JudgeFeedback
     pipelineValid: bool = True
     validationFeedback: list[str] = []
+    executionDiagnostics: ExecutionDiagnostics = Field(default_factory=ExecutionDiagnostics)

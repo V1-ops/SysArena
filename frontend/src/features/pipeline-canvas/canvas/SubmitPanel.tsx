@@ -44,16 +44,28 @@ function toSimulationTrace(run: RagRunResponse, buildNodes: BuildNode[]): Simula
     const nodeId = event.nodeId ?? labelToNodeId.get(event.label);
     if (!nodeId) return [];
 
-    const successful = event.status === "completed" || event.status === "success";
+    const status = event.status === "completed" || event.status === "success"
+      ? "success"
+      : event.status === "degraded"
+        ? "degraded"
+        : event.status === "skipped"
+          ? "skipped"
+          : "error";
     return [{
       nodeId,
-      status: successful ? "success" : "error",
+      status,
       timestampMs: event.startedAtOffsetMs,
       durationMs: event.durationMs,
       activeMessage: event.meta?.description
         ? String(event.meta.description)
-        : `Running ${event.label}.`,
-      completedMessage: successful ? `${event.label} completed.` : `${event.label} failed.`,
+        : status === "skipped" ? `${event.label} is unavailable.` : `Running ${event.label}.`,
+      completedMessage: status === "success"
+        ? `${event.label} completed.`
+        : status === "degraded"
+          ? `${event.label} completed with a degraded connection.`
+          : status === "skipped"
+            ? `${event.label} skipped because its prerequisites are not valid.`
+            : `${event.label} failed.`,
     }];
   });
 }
@@ -76,7 +88,11 @@ function toOverlayResponse(run: RagRunResponse): SubmitPipelineResponse {
   };
 }
 
-export function SubmitPanel() {
+interface SubmitPanelProps {
+  embedded?: boolean;
+}
+
+export function SubmitPanel({ embedded = false }: SubmitPanelProps) {
   const navigate = useNavigate();
   const config = useGraphStore((state) => state.config);
   const nodes = useGraphStore((state) => state.nodes);
@@ -90,8 +106,14 @@ export function SubmitPanel() {
   const setErrorMessage = useGraphStore((state) => state.setErrorMessage);
   const clearEventLog = useGraphStore((state) => state.clearEventLog);
   const runSimulationTrace = useSimulationTrace();
-  const isRag = config.id === "rag-builder";
-  const sampleQueries = config.challengeMeta.sampleQueries ?? [];
+  const isRag = config.id === "rag-builder" || config.challengeMeta.challengeId === "university-rag-001";
+  const sampleQueries = config.challengeMeta.sampleQueries?.length
+    ? config.challengeMeta.sampleQueries
+    : [
+        "What is the meaning of business?",
+        "What are the main functions of a business?",
+        "Why is customer value important to a business?",
+      ];
   const [query, setQuery] = useState(sampleQueries[0] ?? "What is the meaning of business?");
   const [queryMode, setQueryMode] = useState<"sample" | "custom">("sample");
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
@@ -155,7 +177,7 @@ export function SubmitPanel() {
   const busy = runState === "submitting" || runState === "running";
 
   return (
-    <section className="rounded-lg border border-white/8 bg-[#101820] p-4">
+    <section className={embedded ? "space-y-3" : "rounded-lg border border-white/8 bg-[#101820] p-4"}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-white">Run Simulation</p>
@@ -168,6 +190,13 @@ export function SubmitPanel() {
 
       {isRag && (
         <div className="mt-4 space-y-3 rounded-lg border border-[#66FCF1]/10 bg-[#0B0C10] p-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#66FCF1]/10 text-[#66FCF1]">?</span>
+            <div>
+              <p className="text-sm font-semibold text-white">Ask the Document</p>
+              <p className="text-xs text-[#C5C6C7]/55">Choose a practice question or test your own.</p>
+            </div>
+          </div>
           <div className="rounded-md border border-[#45A29E]/20 bg-[#101820] px-3 py-2">
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#45A29E]">Preloaded source</p>
             <p className="mt-1 text-sm font-medium text-white">Business Basics PDF</p>
@@ -198,7 +227,7 @@ export function SubmitPanel() {
             </button>
           </div>
 
-          {queryMode === "sample" && sampleQueries.length > 0 ? (
+          {queryMode === "sample" ? (
             <label className="block space-y-2">
               <span className="text-xs uppercase tracking-[0.16em] text-[#45A29E]">Choose a question</span>
               <select

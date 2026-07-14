@@ -26,7 +26,11 @@ def run_rag(payload: RagRunRequest):
             normalized_pipeline=validation.normalizedPipeline,
             validation=validation,
         )
-    except RuntimeError as exc:
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="The challenge source document was not found.") from exc
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="The RAG execution dependency is unavailable.") from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"RAG execution failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="RAG execution failed unexpectedly.") from exc

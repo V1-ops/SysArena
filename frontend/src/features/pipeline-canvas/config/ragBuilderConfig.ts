@@ -54,7 +54,7 @@ export const ragBuilderConfig: GameModeConfig = {
       inputs: [{ id: "chunks", label: "Chunks", dataType: "chunks" }],
       outputs: [{ id: "vectors", label: "Vectors", dataType: "vectors" }],
       configFields: [
-        { name: "model", label: "Embedding Model", type: "select", options: ["MiniLM-L6", "OpenAI text-embedding-3-small"], default: "MiniLM-L6" },
+        { name: "model", label: "Embedding Model", type: "select", options: ["Local deterministic", "Configured Hugging Face"], default: "Local deterministic" },
       ],
     },
     {
@@ -66,7 +66,7 @@ export const ragBuilderConfig: GameModeConfig = {
       inputs: [{ id: "vectors", label: "Vectors", dataType: "vectors" }],
       outputs: [{ id: "index", label: "Index", dataType: "index" }],
       configFields: [
-        { name: "provider", label: "Provider", type: "select", options: ["FAISS", "Pinecone", "Qdrant"], default: "FAISS" },
+        { name: "provider", label: "Provider", type: "select", options: ["FAISS"], default: "FAISS" },
       ],
     },
     {
@@ -91,7 +91,7 @@ export const ragBuilderConfig: GameModeConfig = {
       inputs: [{ id: "context", label: "Context", dataType: "context" }],
       outputs: [{ id: "reranked-context", label: "Reranked Context", dataType: "context" }],
       configFields: [
-        { name: "strategy", label: "Strategy", type: "select", options: ["Cross Encoder", "Lexical Hybrid"], default: "Cross Encoder" },
+        { name: "strategy", label: "Strategy", type: "select", options: ["Lexical Hybrid"], default: "Lexical Hybrid" },
       ],
     },
     {
@@ -103,7 +103,7 @@ export const ragBuilderConfig: GameModeConfig = {
       inputs: [{ id: "context", label: "Context", dataType: "context" }],
       outputs: [{ id: "prompt", label: "Prompt", dataType: "prompt" }],
       configFields: [
-        { name: "style", label: "Template Style", type: "select", options: ["Structured QA", "Policy Answer"], default: "Structured QA" },
+        { name: "style", label: "Template Style", type: "select", options: ["Structured QA"], default: "Structured QA" },
       ],
     },
     {
@@ -118,7 +118,7 @@ export const ragBuilderConfig: GameModeConfig = {
       ],
       outputs: [{ id: "answer", label: "Answer", dataType: "answer" }],
       configFields: [
-        { name: "model", label: "Model", type: "select", options: ["gpt-4.1-mini", "gpt-4.1"], default: "gpt-4.1-mini" },
+        { name: "model", label: "Model", type: "select", options: ["Local deterministic", "Configured Hugging Face"], default: "Local deterministic" },
         { name: "temperature", label: "Temperature", type: "slider", min: 0, max: 1, step: 0.1, default: 0.2 },
       ],
     },

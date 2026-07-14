@@ -1,12 +1,16 @@
 import { Activity, Trophy } from "lucide-react";
 import { useGraphStore } from "../hooks/useGraphStore";
 
-export function ScoreOverlay() {
+interface ScoreOverlayProps {
+  embedded?: boolean;
+}
+
+export function ScoreOverlay({ embedded = false }: ScoreOverlayProps) {
   const runState = useGraphStore((state) => state.runState);
   const response = useGraphStore((state) => state.lastResponse);
 
   return (
-    <section className="rounded-lg border border-white/8 bg-[#101820] p-4">
+    <section className={embedded ? "space-y-3" : "rounded-lg border border-white/8 bg-[#101820] p-4"}>
       <div className="flex items-center gap-2">
         <Activity className="h-4 w-4 text-[#66FCF1]" />
         <p className="text-sm font-semibold text-white">Run Status</p>

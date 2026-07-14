@@ -79,4 +79,6 @@ def load_challenge_source(challenge_id: str) -> str:
     if pdf_path.exists():
         return str(pdf_path)
     source_path = RAG_DIR / f"{challenge_id}.source.txt"
-    return str(source_path)
+    if source_path.exists():
+        return str(source_path)
+    raise FileNotFoundError(f"No source document exists for challenge '{challenge_id}'.")

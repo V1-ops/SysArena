@@ -44,12 +44,20 @@ def validate_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge])
     node_map = {node.id: node for node in nodes}
     adjacency = defaultdict(list)
     indegree = defaultdict(int)
+    seen_edges: set[tuple[str, str, str | None, str | None]] = set()
     for edge in edges:
         if edge.source not in node_map or edge.target not in node_map:
             invalid_edges.append(
                 InvalidEdge(source=edge.source, target=edge.target, reason="Edge references a missing node.")
             )
             continue
+
+        edge_key = (edge.source, edge.target, edge.sourceHandle, edge.targetHandle)
+        if edge_key in seen_edges:
+            invalid_edges.append(
+                InvalidEdge(source=edge.source, target=edge.target, reason="Duplicate edge: the same handles are already connected.")
+            )
+        seen_edges.add(edge_key)
         adjacency[edge.source].append(edge.target)
         indegree[edge.target] += 1
         indegree.setdefault(edge.source, 0)
@@ -63,22 +71,43 @@ def validate_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge])
     def has_order(first: str, second: str) -> bool:
         return first in label_positions and second in label_positions and label_positions[first] < label_positions[second]
 
-    if "Dense Retriever" in label_positions and "FAISS Vector Store" in label_positions and not has_order("FAISS Vector Store", "Dense Retriever"):
-        feedback.append("FAISS Vector Store must come before Dense Retriever.")
+    invalid_pairs = {(item.source, item.target) for item in invalid_edges}
 
-    if "Embeddings" in label_positions and "FAISS Vector Store" in label_positions and not has_order("Embeddings", "FAISS Vector Store"):
-        feedback.append("Embeddings must come before FAISS Vector Store.")
+    def has_direct_connection(source_label: str, target_label: str, source_handle: str, target_handle: str) -> bool:
+        source_nodes = [node for node in nodes if node.label == source_label]
+        target_nodes = [node for node in nodes if node.label == target_label]
+        return any(
+            edge.source == source.id
+            and edge.target == target.id
+            and edge.sourceHandle == source_handle
+            and edge.targetHandle == target_handle
+            and (edge.source, edge.target) not in invalid_pairs
+            for edge in edges
+            for source in source_nodes
+            for target in target_nodes
+        )
 
-    if "Dense Retriever" in label_positions and "LLM" in label_positions and not has_order("Dense Retriever", "LLM"):
-        feedback.append("Dense Retriever must come before LLM.")
+    required_links = [
+        ("PDF Loader", "Recursive Text Splitting", "documents", "documents", "PDF Loader must feed Recursive Text Splitting."),
+        ("Recursive Text Splitting", "Embeddings", "chunks", "chunks", "Recursive Text Splitting must feed Embeddings."),
+        ("Embeddings", "FAISS Vector Store", "vectors", "vectors", "Embeddings must feed FAISS Vector Store."),
+        ("FAISS Vector Store", "Dense Retriever", "index", "index", "FAISS Vector Store must feed Dense Retriever."),
+    ]
+    for source_label, target_label, source_handle, target_handle, message in required_links:
+        if source_label in label_counts and target_label in label_counts and not has_direct_connection(source_label, target_label, source_handle, target_handle):
+            feedback.append(message)
 
-    if "Reranker" in label_positions:
-        if not ("Dense Retriever" in label_positions and "LLM" in label_positions and has_order("Dense Retriever", "Reranker") and has_order("Reranker", "LLM")):
-            feedback.append("Reranker must sit between Dense Retriever and LLM.")
-
-    if "Prompt Template" in label_positions:
-        if not ("LLM" in label_positions and has_order("Prompt Template", "LLM")):
-            feedback.append("Prompt Template must feed into the LLM stage.")
+    retrieval_source = "Reranker" if "Reranker" in label_counts else "Dense Retriever"
+    retrieval_handle = "reranked-context" if retrieval_source == "Reranker" else "context"
+    if "Reranker" in label_counts and not has_direct_connection("Dense Retriever", "Reranker", "context", "context"):
+        feedback.append("Dense Retriever must feed Reranker through the context handle.")
+    if "Prompt Template" in label_counts:
+        if not has_direct_connection(retrieval_source, "Prompt Template", retrieval_handle, "context"):
+            feedback.append(f"{retrieval_source} must feed Prompt Template context.")
+        if not has_direct_connection("Prompt Template", "LLM", "prompt", "prompt"):
+            feedback.append("Prompt Template must feed the LLM prompt input.")
+    elif "LLM" in label_counts and not has_direct_connection(retrieval_source, "LLM", retrieval_handle, "context"):
+        feedback.append(f"{retrieval_source} must feed the LLM context input when Prompt Template is absent.")
 
     for edge in edges:
         if edge.source in node_map and edge.target in node_map:
@@ -89,19 +118,31 @@ def validate_pipeline(challenge, nodes: list[BuildNode], edges: list[BuildEdge])
                     InvalidEdge(source=edge.source, target=edge.target, reason="Dense Retriever cannot feed FAISS Vector Store.")
                 )
 
-            if edge.sourceHandle or edge.targetHandle:
-                source_def = RAG_HANDLE_TYPES.get(node_map[edge.source].type)
-                target_def = RAG_HANDLE_TYPES.get(node_map[edge.target].type)
-                source_type = source_def and source_def["outputs"].get(edge.sourceHandle or "")
-                target_type = target_def and target_def["inputs"].get(edge.targetHandle or "")
-                if not source_type or not target_type or source_type != target_type:
-                    invalid_edges.append(
-                        InvalidEdge(
-                            source=edge.source,
-                            target=edge.target,
-                            reason="The connected handles carry incompatible data types.",
-                        )
+            if not edge.sourceHandle or not edge.targetHandle:
+                invalid_edges.append(
+                    InvalidEdge(
+                        source=edge.source,
+                        target=edge.target,
+                        reason="Both source and target handles are required for RAG connections.",
                     )
+                )
+                continue
+
+            source_def = RAG_HANDLE_TYPES.get(node_map[edge.source].type)
+            target_def = RAG_HANDLE_TYPES.get(node_map[edge.target].type)
+            source_type = source_def and source_def["outputs"].get(edge.sourceHandle)
+            target_type = target_def and target_def["inputs"].get(edge.targetHandle)
+            if not source_type or not target_type or source_type != target_type:
+                invalid_edges.append(
+                    InvalidEdge(
+                        source=edge.source,
+                        target=edge.target,
+                        reason="The connected handles carry incompatible data types.",
+                    )
+                )
+
+    for invalid_edge in invalid_edges:
+        feedback.append(f"Invalid edge {invalid_edge.source} -> {invalid_edge.target}: {invalid_edge.reason}")
 
     normalized_pipeline = [label for label in detected_order if label in label_counts]
 

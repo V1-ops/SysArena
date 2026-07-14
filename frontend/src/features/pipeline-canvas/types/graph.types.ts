@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 
-export type NodeRunStatus = "idle" | "running" | "success" | "error";
+export type NodeRunStatus = "idle" | "running" | "success" | "degraded" | "skipped" | "error";
 
 export interface PipelineNodeData extends Record<string, unknown> {
   nodeTypeId: string;
@@ -45,7 +45,7 @@ export interface SubmitPipelinePayload {
 
 export interface SimulationTraceStep {
   nodeId: string;
-  status: "success" | "error";
+  status: "success" | "degraded" | "skipped" | "error";
   timestampMs: number;
   durationMs?: number;
   activeMessage: string;
@@ -56,7 +56,7 @@ export interface EventLogEntry {
   id: string;
   nodeId: string;
   nodeLabel: string;
-  status: "running" | "success" | "error";
+  status: "running" | "success" | "degraded" | "skipped" | "error";
   message: string;
   timestamp: string;
 }

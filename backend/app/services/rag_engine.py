@@ -1,7 +1,9 @@
 import re
 import uuid
 import hashlib
+from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from time import perf_counter
 
 import faiss
@@ -14,6 +16,7 @@ from app.schemas.build import BuildEdge, BuildNode
 from app.schemas.build import ValidateBuildResponse
 from app.schemas.rag import (
     JudgeFeedback,
+    ExecutionDiagnostics,
     RagMetrics,
     RagRunResponse,
     RetrievedChunk,
@@ -21,6 +24,96 @@ from app.schemas.rag import (
     SimulationEvent,
 )
 from app.services.challenge_loader import load_challenge_queries, load_challenge_source
+
+
+@dataclass
+class ExecutionPlan:
+    status_by_node_id: dict[str, str]
+    reason_by_node_id: dict[str, str]
+    degraded_node_ids: list[str]
+    skipped_node_ids: list[str]
+    warnings: list[str]
+
+
+def _resolve_model_selection(
+    selection: str,
+    configured_model: str,
+    requested_external: bool,
+    model_kind: str,
+    warnings: list[str],
+) -> tuple[str, bool]:
+    local_aliases = {"", "local", "local deterministic", "local-hash", "local-extractive"}
+    if selection.strip().lower() in local_aliases:
+        return ("local-hash" if model_kind == "embedding" else "local-extractive"), False
+    if not requested_external:
+        warnings.append(f"{model_kind.title()} model '{selection}' requires external execution; using local execution.")
+        return ("local-hash" if model_kind == "embedding" else "local-extractive"), False
+    if selection.strip().lower() in {"configured hugging face", configured_model.lower()}:
+        return configured_model, True
+    warnings.append(f"Unsupported {model_kind} model '{selection}'; using the configured Hugging Face model.")
+    return configured_model, True
+
+
+def _build_execution_plan(
+    nodes: list[BuildNode],
+    edges: list[BuildEdge],
+    normalized_pipeline: list[str],
+    validation: ValidateBuildResponse,
+) -> ExecutionPlan:
+    node_map = {node.id: node for node in nodes}
+    invalid_pairs = {(item.source, item.target) for item in validation.invalidEdges}
+    adjacency: dict[str, list[str]] = {node.id: [] for node in nodes}
+    incoming: dict[str, int] = {node.id: 0 for node in nodes}
+    for edge in edges:
+        if edge.source not in node_map or edge.target not in node_map or (edge.source, edge.target) in invalid_pairs:
+            continue
+        adjacency[edge.source].append(edge.target)
+        incoming[edge.target] += 1
+
+    pdf_roots = [node.id for node in nodes if node.label == "PDF Loader"]
+    roots = pdf_roots or [node_id for node_id, count in incoming.items() if count == 0]
+    reachable: set[str] = set()
+    queue = list(roots)
+    while queue:
+        node_id = queue.pop(0)
+        if node_id in reachable:
+            continue
+        reachable.add(node_id)
+        queue.extend(adjacency[node_id])
+
+    invalid_node_ids = {
+        node_id
+        for item in validation.invalidEdges
+        for node_id in (item.source, item.target)
+        if node_id in node_map
+    }
+    feedback_text = " ".join(validation.feedback)
+    status_by_node_id: dict[str, str] = {}
+    reason_by_node_id: dict[str, str] = {}
+    degraded_node_ids: list[str] = []
+    skipped_node_ids: list[str] = []
+
+    for node in nodes:
+        label_in_feedback = node.label in feedback_text
+        if node.id in invalid_node_ids or (node.id in reachable and label_in_feedback and not validation.isValid):
+            status_by_node_id[node.id] = "degraded"
+            reason_by_node_id[node.id] = "This stage is connected through an invalid or non-canonical edge."
+            degraded_node_ids.append(node.id)
+        elif node.id not in reachable:
+            status_by_node_id[node.id] = "skipped"
+            reason_by_node_id[node.id] = "This stage is not reachable from the PDF Loader through valid connections."
+            skipped_node_ids.append(node.id)
+        else:
+            status_by_node_id[node.id] = "completed"
+
+    warnings = [
+        item
+        for item in validation.feedback
+        if not item.startswith("Optional improvement") and not item.startswith("Pipeline is valid")
+    ]
+    if not normalized_pipeline:
+        warnings.append("No executable stages were found in the submitted graph.")
+    return ExecutionPlan(status_by_node_id, reason_by_node_id, degraded_node_ids, skipped_node_ids, warnings)
 
 
 def run_rag_pipeline(
@@ -31,11 +124,17 @@ def run_rag_pipeline(
     normalized_pipeline: list[str],
     validation: ValidateBuildResponse,
 ) -> RagRunResponse:
-    del edges
     settings = get_settings()
     start = perf_counter()
 
     node_values = {node.label: node.values for node in nodes}
+    runtime_warnings: list[str] = []
+    requested_external = settings.rag_execution_mode == "external" and bool(settings.huggingface_api_token)
+    if settings.rag_execution_mode not in {"local", "external"}:
+        runtime_warnings.append("Unknown RAG_EXECUTION_MODE; using local deterministic execution.")
+    if settings.rag_execution_mode == "external" and not settings.huggingface_api_token:
+        runtime_warnings.append("External execution was requested without a Hugging Face token; using local execution.")
+
     chunk_size = _bounded_int(
         node_values.get("Recursive Text Splitting", {}).get("chunkSize"),
         settings.rag_chunk_size,
@@ -55,36 +154,96 @@ def run_rag_pipeline(
         maximum=20,
     )
     reranker_used = "Reranker" in normalized_pipeline
+    embedding_selection = str(node_values.get("Embeddings", {}).get("model", "Local deterministic"))
+    generation_selection = str(node_values.get("LLM", {}).get("model", "Local deterministic"))
+    embedding_model, embedding_external = _resolve_model_selection(
+        embedding_selection,
+        settings.hf_embedding_model,
+        requested_external,
+        "embedding",
+        runtime_warnings,
+    )
+    generation_model, generation_external = _resolve_model_selection(
+        generation_selection,
+        settings.hf_llm_model,
+        requested_external,
+        "generation",
+        runtime_warnings,
+    )
+    vector_provider = str(node_values.get("FAISS Vector Store", {}).get("provider", "FAISS"))
+    if vector_provider != "FAISS":
+        runtime_warnings.append(f"Vector provider '{vector_provider}' is not supported by this runtime; using FAISS.")
+    rerank_strategy = str(node_values.get("Reranker", {}).get("strategy", "Lexical Hybrid"))
+    if rerank_strategy != "Lexical Hybrid":
+        runtime_warnings.append(f"Reranker strategy '{rerank_strategy}' is not supported; using Lexical Hybrid.")
+        rerank_strategy = "Lexical Hybrid"
+    prompt_style = str(node_values.get("Prompt Template", {}).get("style", "Structured QA"))
+    if prompt_style != "Structured QA":
+        runtime_warnings.append(f"Prompt style '{prompt_style}' is not supported; using Structured QA.")
+        prompt_style = "Structured QA"
+    temperature = _bounded_float(
+        node_values.get("LLM", {}).get("temperature"),
+        0.2,
+        minimum=0.0,
+        maximum=1.0,
+    )
 
     document_path = load_challenge_source(challenge.id)
-    chunks, faiss_index = _load_or_build_index(
+    chunks, faiss_index, index_used_external, index_warnings = _load_or_build_index(
         document_path=document_path,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        use_external=embedding_external,
+        embedding_model=embedding_model,
+        timeout_seconds=settings.rag_external_timeout_seconds,
     )
+    runtime_warnings.extend(index_warnings)
 
-    query_embedding = _embed_single(query)
+    query_embedding, query_used_external, query_warning = _embed_single(
+        query,
+        use_external=index_used_external,
+        model=embedding_model,
+        timeout_seconds=settings.rag_external_timeout_seconds,
+    )
+    if query_warning:
+        runtime_warnings.append(query_warning)
+    if index_used_external and not query_used_external:
+        runtime_warnings.append("Query embedding fell back to local execution to preserve vector dimensions.")
     dense_hits = _dense_retrieve(faiss_index, chunks, query_embedding, max(top_k, settings.rag_rerank_k if reranker_used else top_k))
-    reranked_hits = _rerank_hits(query, dense_hits, top_k) if reranker_used else dense_hits[:top_k]
-    prompt = _build_prompt(query, reranked_hits)
-    answer = _generate_structured_answer(prompt)
+    reranked_hits = _rerank_hits(query, dense_hits, top_k, rerank_strategy) if reranker_used else dense_hits[:top_k]
+    query_spec = _match_query_spec(challenge.id, query)
+    prompt = _build_prompt(query, reranked_hits, prompt_style, query_spec.get("answerLead", "Based on the document,"))
+    answer, answer_used_external, answer_warning = _generate_structured_answer(
+        prompt,
+        use_external=generation_external,
+        model=generation_model,
+        temperature=temperature,
+        timeout_seconds=settings.rag_external_timeout_seconds,
+        answer_lead=query_spec.get("answerLead", "Based on the document,"),
+    )
+    if answer_warning:
+        runtime_warnings.append(answer_warning)
 
     latency_ms = int((perf_counter() - start) * 1000)
     retrieved = [
         RetrievedChunk(chunkId=f"chunk-{item['chunk_id']}", text=item["text"], score=round(float(item["score"]), 4))
         for item in reranked_hits
     ]
+    actual_external = index_used_external and query_used_external or answer_used_external
     metrics = RagMetrics(
         latencyMs=latency_ms,
         retrievedChunkCount=len(retrieved),
         topK=top_k,
         contextChars=sum(len(chunk.text) for chunk in retrieved),
-        estimatedCost="HF Inference API usage" if settings.huggingface_api_token else "Local deterministic fallback",
+        estimatedCost="HF Inference API usage" if actual_external else "Local deterministic execution",
         chunkSize=chunk_size,
         chunkOverlap=chunk_overlap,
         rerankerUsed=reranker_used,
+        executionMode="external" if actual_external else "local",
+        embeddingModel=embedding_model if index_used_external else "local-hash",
+        generationModel=generation_model if answer_used_external else "local-extractive",
     )
-    query_spec = _match_query_spec(challenge.id, query)
+    execution_plan = _build_execution_plan(nodes, edges, normalized_pipeline, validation)
     score_breakdown = _score_run(
         normalized_pipeline=normalized_pipeline,
         answer=answer,
@@ -93,6 +252,9 @@ def run_rag_pipeline(
         latency_ms=latency_ms,
         top_k=top_k,
         validation=validation,
+        scoring_dimensions=challenge.scoringDimensions,
+        degraded_count=len(execution_plan.degraded_node_ids),
+        skipped_count=len(execution_plan.skipped_node_ids),
     )
     judge_feedback = _build_judge_feedback(normalized_pipeline, score_breakdown, validation.feedback)
     simulation_timeline = _build_timeline(
@@ -103,6 +265,7 @@ def run_rag_pipeline(
         retrieved_chunks=retrieved,
         used_optional_rerank=reranker_used,
         latency_ms=max(latency_ms, 1),
+        execution_plan=execution_plan,
     )
     return RagRunResponse(
         runId=str(uuid.uuid4()),
@@ -115,11 +278,18 @@ def run_rag_pipeline(
         judgeFeedback=judge_feedback,
         pipelineValid=validation.isValid,
         validationFeedback=validation.feedback,
+        executionDiagnostics=ExecutionDiagnostics(
+            degradedNodeIds=execution_plan.degraded_node_ids,
+            skippedNodeIds=execution_plan.skipped_node_ids,
+            warnings=runtime_warnings + execution_plan.warnings,
+        ),
     )
 
 
 @lru_cache(maxsize=4)
 def _extract_pdf_text(pdf_path: str) -> str:
+    if Path(pdf_path).suffix.lower() == ".txt":
+        return re.sub(r"\n{2,}", "\n\n", Path(pdf_path).read_text(encoding="utf-8")).strip()
     reader = PdfReader(pdf_path)
     parts = []
     for page in reader.pages:
@@ -150,15 +320,33 @@ def _load_or_build_index(
     document_path: str,
     chunk_size: int,
     chunk_overlap: int,
-) -> tuple[list[str], faiss.IndexFlatIP]:
+    use_external: bool,
+    embedding_model: str,
+    timeout_seconds: int,
+) -> tuple[list[str], faiss.IndexFlatIP, bool, tuple[str, ...]]:
     text = _extract_pdf_text(document_path)
+    if not text.strip():
+        raise ValueError("The challenge source document contains no extractable text.")
     chunks = _recursive_split(text, chunk_size, chunk_overlap)
-    return chunks, _build_faiss_index(_embed_batch(chunks))
+    embeddings, used_external, warnings = _embed_batch(chunks, use_external, embedding_model, timeout_seconds)
+    if use_external and not used_external:
+        local_embeddings, _, _ = _embed_batch(chunks, False, "local-hash", timeout_seconds)
+        embeddings = local_embeddings
+        warnings = (*warnings, "Embedding service was unavailable; rebuilt the index with local embeddings.")
+    return chunks, _build_faiss_index(embeddings), used_external, tuple(warnings)
 
 
 def _bounded_int(value, fallback: int, minimum: int, maximum: int) -> int:
     try:
         parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = fallback
+    return max(minimum, min(parsed, maximum))
+
+
+def _bounded_float(value, fallback: float, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)
     except (TypeError, ValueError):
         parsed = fallback
     return max(minimum, min(parsed, maximum))
@@ -190,16 +378,36 @@ def _split_with_separators(text: str, chunk_size: int, separators: list[str]) ->
     return chunks
 
 
-def _embed_batch(texts: list[str]) -> np.ndarray:
-    return np.array([_embed_single(text) for text in texts], dtype="float32")
+def _embed_batch(
+    texts: list[str],
+    use_external: bool,
+    model: str,
+    timeout_seconds: int,
+) -> tuple[np.ndarray, bool, tuple[str, ...]]:
+    vectors = []
+    warnings: list[str] = []
+    external_successes = 0
+    for text in texts:
+        vector, used_external, warning = _embed_single(text, use_external, model, timeout_seconds)
+        vectors.append(vector)
+        external_successes += int(used_external)
+        if warning and warning not in warnings:
+            warnings.append(warning)
+    used_external = bool(texts) and use_external and external_successes == len(texts)
+    return np.array(vectors, dtype="float32"), used_external, tuple(warnings)
 
 
-def _embed_single(text: str) -> np.ndarray:
+def _embed_single(
+    text: str,
+    use_external: bool = False,
+    model: str | None = None,
+    timeout_seconds: int | None = None,
+) -> tuple[np.ndarray, bool, str | None]:
     settings = get_settings()
-    if not settings.huggingface_api_token:
-        return _fallback_embed(text)
+    if not use_external:
+        return _fallback_embed(text), False, None
 
-    url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{settings.hf_embedding_model}"
+    url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model or settings.hf_embedding_model}"
     headers = {
         "Authorization": f"Bearer {settings.huggingface_api_token}",
         "Content-Type": "application/json",
@@ -209,16 +417,16 @@ def _embed_single(text: str) -> np.ndarray:
         "options": {"wait_for_model": True},
     }
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout_seconds or settings.rag_external_timeout_seconds)
         if not response.ok:
             raise RuntimeError(f"Hugging Face embedding request failed: {response.status_code} {response.text}")
         data = response.json()
         vector = _normalize_embedding_response(data)
-        return np.array(vector, dtype="float32")
-    except requests.RequestException:
-        return _fallback_embed(text)
+        return np.array(vector, dtype="float32"), True, None
+    except requests.RequestException as exc:
+        return _fallback_embed(text), False, f"Embedding service unavailable; using local embeddings ({exc.__class__.__name__})."
     except RuntimeError:
-        return _fallback_embed(text)
+        return _fallback_embed(text), False, "Embedding service returned an unsupported response; using local embeddings."
 
 
 def _normalize_embedding_response(data) -> list[float]:
@@ -236,6 +444,8 @@ def _normalize_embedding_response(data) -> list[float]:
 
 
 def _build_faiss_index(embeddings: np.ndarray) -> faiss.IndexFlatIP:
+    if embeddings.ndim != 2 or embeddings.shape[0] == 0:
+        raise ValueError("The challenge source produced no searchable chunks.")
     normalized = embeddings.copy()
     faiss.normalize_L2(normalized)
     index = faiss.IndexFlatIP(normalized.shape[1])
@@ -255,7 +465,7 @@ def _dense_retrieve(index: faiss.IndexFlatIP, chunks: list[str], query_embedding
     return hits
 
 
-def _rerank_hits(query: str, hits: list[dict], top_k: int) -> list[dict]:
+def _rerank_hits(query: str, hits: list[dict], top_k: int, strategy: str = "Lexical Hybrid") -> list[dict]:
     query_terms = set(_tokenize(query))
     reranked = []
     for hit in hits:
@@ -268,15 +478,18 @@ def _rerank_hits(query: str, hits: list[dict], top_k: int) -> list[dict]:
     return reranked[:top_k]
 
 
-def _build_prompt(query: str, hits: list[dict]) -> str:
+def _build_prompt(query: str, hits: list[dict], style: str, answer_lead: str) -> str:
     context_blocks = []
     for idx, hit in enumerate(hits, start=1):
         context_blocks.append(f"Chunk {idx}:\n{hit['text']}")
     context = "\n\n".join(context_blocks)
+    format_instruction = "Use the structured QA format below." if style == "Structured QA" else "Use the configured answer format below."
     return (
         "You are a RAG assistant for Business Basics. "
         "Answer only from the provided context. "
         "If the answer is not clearly present, say that the document does not provide enough information.\n\n"
+        f"Preferred answer lead: {answer_lead}\n\n"
+        f"{format_instruction}\n"
         "Return a structured answer in markdown with exactly these sections:\n"
         "## Final Answer\n## Key Concepts\n## Evidence From Document\n\n"
         f"User Query:\n{query}\n\n"
@@ -284,12 +497,19 @@ def _build_prompt(query: str, hits: list[dict]) -> str:
     )
 
 
-def _generate_structured_answer(prompt: str) -> str:
+def _generate_structured_answer(
+    prompt: str,
+    use_external: bool,
+    model: str,
+    temperature: float,
+    timeout_seconds: int,
+    answer_lead: str,
+) -> tuple[str, bool, str | None]:
     settings = get_settings()
-    if not settings.huggingface_api_token:
-        return _fallback_generate_answer(prompt)
+    if not use_external:
+        return _fallback_generate_answer(prompt, answer_lead), False, None
 
-    url = f"https://api-inference.huggingface.co/models/{settings.hf_llm_model}"
+    url = f"https://api-inference.huggingface.co/models/{model}"
     headers = {
         "Authorization": f"Bearer {settings.huggingface_api_token}",
         "Content-Type": "application/json",
@@ -298,26 +518,26 @@ def _generate_structured_answer(prompt: str) -> str:
         "inputs": prompt,
         "parameters": {
             "max_new_tokens": 700,
-            "temperature": 0.2,
+            "temperature": temperature,
             "return_full_text": False
         },
         "options": {"wait_for_model": True}
     }
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=180)
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout_seconds)
         if not response.ok:
             raise RuntimeError(f"Hugging Face generation request failed: {response.status_code} {response.text}")
 
         data = response.json()
         if isinstance(data, list) and data and "generated_text" in data[0]:
-            return data[0]["generated_text"].strip()
+            return data[0]["generated_text"].strip(), True, None
         if isinstance(data, dict) and "generated_text" in data:
-            return data["generated_text"].strip()
+            return data["generated_text"].strip(), True, None
         raise RuntimeError("Unexpected generation response format from Hugging Face.")
-    except requests.RequestException:
-        return _fallback_generate_answer(prompt)
+    except requests.RequestException as exc:
+        return _fallback_generate_answer(prompt, answer_lead), False, f"Generation service unavailable; using local answer generation ({exc.__class__.__name__})."
     except RuntimeError:
-        return _fallback_generate_answer(prompt)
+        return _fallback_generate_answer(prompt, answer_lead), False, "Generation service returned an unsupported response; using local answer generation."
 
 
 def _fallback_embed(text: str, dim: int = 384) -> np.ndarray:
@@ -334,7 +554,7 @@ def _fallback_embed(text: str, dim: int = 384) -> np.ndarray:
     return vector if norm == 0 else vector / norm
 
 
-def _fallback_generate_answer(prompt: str) -> str:
+def _fallback_generate_answer(prompt: str, answer_lead: str) -> str:
     query_match = re.search(r"User Query:\n(.*?)\n\nContext:\n", prompt, flags=re.S)
     context_match = re.search(r"Context:\n(.*)$", prompt, flags=re.S)
     query = query_match.group(1).strip() if query_match else ""
@@ -355,6 +575,8 @@ def _fallback_generate_answer(prompt: str) -> str:
         best_sentences = sentences[:2]
 
     final_answer = " ".join(best_sentences[:2]).strip() or "The document does not provide enough information to answer the query clearly."
+    if answer_lead.strip() and not final_answer.lower().startswith(answer_lead.strip().lower()):
+        final_answer = f"{answer_lead.strip()} {final_answer}"
     key_concepts = sorted(query_terms)[:5]
     evidence_lines = best_sentences[:3] if best_sentences else ["No directly relevant evidence was found in the retrieved context."]
 
@@ -392,10 +614,23 @@ def _score_run(
     latency_ms: int,
     top_k: int,
     validation: ValidateBuildResponse,
+    scoring_dimensions,
+    degraded_count: int,
+    skipped_count: int,
 ) -> list[ScoreBreakdown]:
-    architecture = 40
+    configured_max = {item.label: item.weight for item in scoring_dimensions}
+    max_scores = {
+        "Architecture correctness": configured_max.get("Architecture correctness", 40),
+        "Retrieval readiness": configured_max.get("Retrieval readiness", 20),
+        "Answer quality": configured_max.get("Answer quality", 20),
+        "Latency performance": configured_max.get("Latency performance", 10),
+        "Best-practice bonus": configured_max.get("Best-practice bonus", 10),
+    }
+    architecture = max_scores["Architecture correctness"]
     architecture -= len(validation.requiredMissingNodes) * 8
     architecture -= len(validation.invalidEdges) * 5
+    architecture -= degraded_count * 3
+    architecture -= skipped_count * 5
     blocking_feedback = [
         item for item in validation.feedback
         if not item.startswith("Optional improvement") and not item.startswith("Pipeline is valid")
@@ -406,28 +641,42 @@ def _score_run(
     if "Prompt Template" not in normalized_pipeline:
         architecture -= 3
 
-    retrieval = 20 if retrieved_chunks else 6
+    retrieval = max_scores["Retrieval readiness"] if retrieved_chunks else max(0, max_scores["Retrieval readiness"] // 3)
     if len(retrieved_chunks) < min(top_k, 2):
         retrieval -= 4
 
     expected = [keyword.lower() for keyword in query_spec.get("expectedKeywords", [])]
     haystack = " ".join([answer] + [chunk.text for chunk in retrieved_chunks]).lower()
-    matched = sum(1 for keyword in expected if keyword in haystack)
-    answer_quality = 10 if not expected else min(20, max(8, int((matched / len(expected)) * 20)))
+    if expected:
+        matched = sum(1 for keyword in expected if keyword in haystack)
+        answer_quality = min(max_scores["Answer quality"], max(0, int((matched / len(expected)) * max_scores["Answer quality"])))
+    else:
+        stop_words = {"a", "an", "and", "are", "about", "be", "by", "for", "from", "how", "in", "is", "of", "on", "or", "the", "to", "what", "why", "with"}
+        query_terms = {term for term in _tokenize(query_spec.get("query", "")) if term not in stop_words}
+        evidence_terms = set(_tokenize(" ".join(chunk.text for chunk in retrieved_chunks)))
+        answer_terms = set(_tokenize(answer))
+        evidence_coverage = len(query_terms & evidence_terms) / max(len(query_terms), 1)
+        answer_support = len(query_terms & answer_terms) / max(len(query_terms), 1)
+        structure = sum(section in answer for section in ("## Final Answer", "## Key Concepts", "## Evidence From Document")) / 3
+        answer_quality = int(max_scores["Answer quality"] * min(1.0, evidence_coverage * 0.55 + answer_support * 0.35 + structure * 0.1))
 
-    latency = 10 if latency_ms < 10000 else 8 if latency_ms < 20000 else 6
-    best_practice = 10
+    latency = max_scores["Latency performance"] if latency_ms < 10000 else max(0, max_scores["Latency performance"] - 2) if latency_ms < 20000 else max(0, max_scores["Latency performance"] - 4)
+    best_practice = max_scores["Best-practice bonus"]
     if "Prompt Template" not in normalized_pipeline:
         best_practice -= 4
     if "Reranker" not in normalized_pipeline:
         best_practice -= 3
 
+    raw_scores = {
+        "Architecture correctness": architecture,
+        "Retrieval readiness": retrieval,
+        "Answer quality": answer_quality,
+        "Latency performance": latency,
+        "Best-practice bonus": best_practice,
+    }
     return [
-        ScoreBreakdown(label="Architecture correctness", score=max(architecture, 0), maxScore=40),
-        ScoreBreakdown(label="Retrieval readiness", score=max(retrieval, 0), maxScore=20),
-        ScoreBreakdown(label="Answer quality", score=max(answer_quality, 0), maxScore=20),
-        ScoreBreakdown(label="Latency performance", score=max(latency, 0), maxScore=10),
-        ScoreBreakdown(label="Best-practice bonus", score=max(best_practice, 0), maxScore=10),
+        ScoreBreakdown(label=label, score=max(0, min(raw_scores.get(label, 0), max_score)), maxScore=max_score)
+        for label, max_score in max_scores.items()
     ]
 
 
@@ -474,6 +723,7 @@ def _build_timeline(
     retrieved_chunks: list[RetrievedChunk],
     used_optional_rerank: bool,
     latency_ms: int,
+    execution_plan: ExecutionPlan,
 ) -> list[SimulationEvent]:
     del used_optional_rerank, latency_ms
     node_ids = {node.label: node.id for node in nodes}
@@ -500,17 +750,22 @@ def _build_timeline(
     timeline: list[SimulationEvent] = []
     next_start = 0
     for index, label in enumerate(normalized_pipeline):
-        duration = durations.get(label, 300)
+        node_id = node_ids.get(label)
+        status = execution_plan.status_by_node_id.get(node_id or "", "completed")
+        duration = 120 if status == "skipped" else 220 if status == "degraded" else durations.get(label, 300)
+        event_meta = dict(metadata.get(label, {}))
+        if status != "completed":
+            event_meta["reason"] = execution_plan.reason_by_node_id.get(node_id or "", "Stage could not execute normally.")
         timeline.append(
             SimulationEvent(
                 id=f"rag-step-{index}-{label.lower().replace(' ', '-')}",
                 type=label.lower().replace(" ", "-"),
                 label=label,
-                status="completed",
-                nodeId=node_ids.get(label),
+                status=status,
+                nodeId=node_id,
                 startedAtOffsetMs=next_start,
                 durationMs=duration,
-                meta=metadata.get(label, {}),
+                meta=event_meta,
             )
         )
         next_start += duration

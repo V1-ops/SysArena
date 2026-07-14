@@ -9,6 +9,8 @@ const statusStyles = {
   idle: "border-white/10",
   running: "border-[#66FCF1]/70 shadow-[0_0_35px_rgba(102,252,241,0.2)]",
   success: "border-[#45A29E]/80",
+  degraded: "border-amber-300/80 shadow-[0_0_35px_rgba(245,158,11,0.14)]",
+  skipped: "border-white/25 opacity-70",
   error: "border-red-400/70",
 };
 
@@ -172,7 +174,7 @@ export function ConfigurableNode({ id, data, selected }: NodeProps<PipelineNode>
         <div className="flex items-center gap-2 border-t border-white/8 px-4 py-2 text-xs text-[#C5C6C7]/75">
           {data.status === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#66FCF1]" />}
           {data.status === "success" && <CheckCircle2 className="h-3.5 w-3.5 text-[#45A29E]" />}
-          {data.status === "error" && <AlertCircle className="h-3.5 w-3.5 text-red-300" />}
+          {(data.status === "degraded" || data.status === "skipped" || data.status === "error") && <AlertCircle className={`h-3.5 w-3.5 ${data.status === "degraded" ? "text-amber-300" : data.status === "skipped" ? "text-[#C5C6C7]/50" : "text-red-300"}`} />}
           <span className="capitalize">{data.status}</span>
         </div>
       )}

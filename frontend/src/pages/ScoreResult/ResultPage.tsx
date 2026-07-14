@@ -119,7 +119,15 @@ export function ResultPage() {
                 <Metric label="Chunking" value={`${ragRun.metrics.chunkSize} / ${ragRun.metrics.chunkOverlap}`} />
                 <Metric label="Reranker" value={ragRun.metrics.rerankerUsed ? "Used" : "Not used"} />
                 <Metric label="Execution" value={ragRun.metrics.estimatedCost} />
+                <Metric label="Execution mode" value={ragRun.metrics.executionMode} />
+                <Metric label="Embedding model" value={ragRun.metrics.embeddingModel} />
+                <Metric label="Generation model" value={ragRun.metrics.generationModel} />
               </div>
+              {ragRun.executionDiagnostics?.warnings.length ? (
+                <div className="rounded-xl border border-amber-400/20 bg-amber-950/20 px-4 py-3 text-xs leading-5 text-amber-100">
+                  {ragRun.executionDiagnostics.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>
