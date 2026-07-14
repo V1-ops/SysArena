@@ -25,6 +25,11 @@ export interface Challenge extends ChallengeSummary {
   objectives: string[];
   supportedComponents: string[];
   hint: string;
+  stage?: number;
+  status?: string;
+  outcome?: string;
+  workflow?: string[];
+  tags?: string[];
 }
 
 export interface ChallengeDetail extends Challenge {
