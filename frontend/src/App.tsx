@@ -7,6 +7,9 @@ import { BuilderPage } from "./pages/DragDropBuilder/BuilderPage";
 import { SimulationPage } from "./pages/Simulation/SimulationPage";
 import { ResultPage } from "./pages/ScoreResult/ResultPage";
 import { ProfilePage } from "./pages/Profile/ProfilePage";
+import { OptimizerChallengePage } from "./pages/OptimizerChallengePage";
+// @ts-ignore The parallel p5 mini-game is intentionally kept as a plain JSX module.
+import PhysicsOptimizer from "./pages/PhysicsOptimizer.jsx";
 
 export default function App() {
   return (
@@ -17,6 +20,8 @@ export default function App() {
           <Route path="/challenges" element={<ChallengeListingPage />} />
           <Route path="/challenge/:challengeId" element={<ChallengeDescriptionPage />} />
           <Route path="/build/:challengeId" element={<BuilderPage />} />
+          <Route path="/optimizer/:challengeId" element={<OptimizerChallengePage />} />
+          <Route path="/physics-optimizer/:challengeId" element={<PhysicsOptimizer />} />
           <Route path="/simulate/:challengeId" element={<SimulationPage />} />
           <Route path="/result/:challengeId" element={<ResultPage />} />
           <Route path="/profile" element={<ProfilePage />} />

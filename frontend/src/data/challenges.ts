@@ -12,6 +12,30 @@ export const playerProfile: PlayerProfile = {
 
 export const challenges: Challenge[] = [
   {
+    id: "optimizer-gradient-001",
+    title: "Optimizer Dojo: Find the Minimum",
+    category: "Optimize",
+    difficulty: "Easy",
+    rewardXp: 160,
+    estimatedTime: "5 min",
+    summary: "Tune a learning rate and guide gradient descent to the global minimum without overshooting.",
+    objectives: ["Understand gradient descent steps", "Compare manual and grid search", "Choose a stable learning rate"],
+    supportedComponents: ["Learning Rate", "Manual Search", "Grid Search", "Gradient Descent"],
+    hint: "Small steps are safe but slow; large steps can jump past the minimum.",
+  },
+  {
+    id: "physics-optimizer-001",
+    title: "Physics Optimizer: Launch the Best Schedule",
+    category: "Optimize",
+    difficulty: "Medium",
+    rewardXp: 190,
+    estimatedTime: "6 min",
+    summary: "Use dynamic learning-rate formulas to launch a 22-feature model into its target zone.",
+    objectives: ["Compare constant, 1/n, and 1/2ⁿ schedules", "Map the two salient weights to motion", "Avoid divergence and premature convergence"],
+    supportedComponents: ["22 Model Weights", "Fixed Launch Angle", "Constant LR", "1/n", "1/2ⁿ"],
+    hint: "Only two important weights are visible in the flight; the other twenty keep learning in the background.",
+  },
+  {
     id: "design-whatsapp-001",
     title: "Design WhatsApp for 100M users",
     category: "System Design",
