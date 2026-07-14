@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import type { SyntheticEvent } from "react";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { NodeIcon } from "../lib/icons";
 import { useGraphStore } from "../hooks/useGraphStore";
@@ -13,6 +14,10 @@ const statusStyles = {
   skipped: "border-white/25 opacity-70",
   error: "border-red-400/70",
 };
+
+function stopNodeInteraction(event: SyntheticEvent) {
+  event.stopPropagation();
+}
 
 function handleTop(index: number, total: number) {
   return `${((index + 1) / (total + 1)) * 100}%`;
@@ -85,15 +90,20 @@ function FieldEditor({
 
   if (field.type === "slider") {
     return (
-      <div className="space-y-1">
+      <div className="nodrag nowheel nopan space-y-1" onPointerDown={stopNodeInteraction} onPointerMove={stopNodeInteraction} onMouseDown={stopNodeInteraction} onTouchStart={stopNodeInteraction} onWheel={stopNodeInteraction}>
         <input
-          className="w-full accent-[#66FCF1]"
+          className="nodrag nowheel w-full cursor-pointer accent-[#66FCF1]"
           type="range"
           min={field.min}
           max={field.max}
           step={field.step}
           value={Number(value ?? field.default)}
           onChange={(event) => onChange(Number(event.target.value))}
+          onPointerDown={stopNodeInteraction}
+          onPointerMove={stopNodeInteraction}
+          onMouseDown={stopNodeInteraction}
+          onTouchStart={stopNodeInteraction}
+          style={{ touchAction: "none" }}
         />
         <div className="text-right text-[10px] text-[#66FCF1]">{String(value ?? field.default)}</div>
       </div>
@@ -139,7 +149,7 @@ export function ConfigurableNode({ id, data, selected }: NodeProps<PipelineNode>
         <NodeHandle key={handle.id} handle={handle} index={index} total={nodeDef.outputs.length} type="source" />
       ))}
 
-      <div className="border-b border-white/8 p-4">
+      <div className="border-b border-white/8 p-4" aria-label={`${nodeDef.label} node`}>
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#66FCF1]/20 bg-[#0B0C10]">
             <NodeIcon name={nodeDef.icon} className="h-4 w-4 text-[#66FCF1]" />
@@ -152,7 +162,6 @@ export function ConfigurableNode({ id, data, selected }: NodeProps<PipelineNode>
                 style={{ backgroundColor: config.theme.nodeColors[nodeDef.category] ?? config.theme.accent }}
               />
             </div>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#C5C6C7]/65">{nodeDef.description}</p>
           </div>
         </div>
       </div>

@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "id": "agent-coder-001",
+  "category": "agents",
+  "title": "Architect an autonomous coding assistant",
+  "difficulty": "Medium",
+  "rewardXp": 140,
+  "estimatedTime": "7 min",
+  "summary": "Design a multi-agent flow that plans, researches, codes, tests, and reviews before delivery.",
+  "objectives": ["Order agents correctly", "Keep reasoning clear", "Reduce unnecessary hops"],
+  "supportedComponents": ["Planner", "Researcher", "Coder", "Tester", "Reviewer"],
+  "hint": "The planner should frame the mission before execution agents begin.",
+  "scoringDimensions": [{"label": "Workflow correctness", "weight": 70}, {"label": "Execution quality", "weight": 30}],
+  "validationRules": {"requiredCore": ["Planner", "Researcher", "Coder", "Tester", "Reviewer"], "singlePipeline": true},
+  "surface": "builder",
+  "gameModeId": "agent-builder",
+  "allowedNodeTypeIds": ["planner", "researcher", "coder", "tester", "reviewer"],
+  "maxNodes": 7,
+  "timeLimitSeconds": 420
+}

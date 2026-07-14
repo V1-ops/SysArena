@@ -5,8 +5,12 @@ import type { GameModeId } from "../../features/pipeline-canvas/config";
 import { challenges } from "../../data/challenges";
 import { fetchChallengeDetail } from "../../services/api";
 import type { ChallengeDetail } from "../../types";
+import { setActiveChallenge } from "../../lib/challenge-session";
 
-function modeForChallenge(category?: string, challengeId?: string): GameModeId {
+function modeForChallenge(category?: string, challengeId?: string, gameModeId?: string): GameModeId {
+  if (gameModeId === "rag-builder" || gameModeId === "agent-builder" || gameModeId === "system-design-builder") {
+    return gameModeId;
+  }
   const challenge = challenges.find((item) => item.id === challengeId) ?? challenges[0];
   const effectiveCategory = category ?? challenge.category;
 
@@ -26,6 +30,10 @@ export function BuilderPage() {
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loading, setLoading] = useState(Boolean(challengeId));
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (challengeId) setActiveChallenge(challengeId);
+  }, [challengeId]);
 
   useEffect(() => {
     if (!challengeId) {
@@ -73,7 +81,8 @@ export function BuilderPage() {
 
   return (
     <CanvasSimulationExperience
-      initialModeId={modeForChallenge(challenge?.category, challengeId)}
+      key={challenge?.id ?? challengeId}
+      initialModeId={modeForChallenge(challenge?.category, challengeId, challenge?.gameModeId)}
       challengeMetaOverride={
         challenge
           ? {

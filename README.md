@@ -1,26 +1,35 @@
 # EngineerVerse
 
-Minimal MVP scaffold for a gamified engineering arcade.
+EngineerVerse is a gamified learning platform for engineering and machine learning concepts.
 
-## Apps
+## Game Idea
 
-- `frontend/` - React app UI
-- `backend/` - FastAPI app
-- `content/challenges/` - challenge definitions
-- `docs/` - lightweight project docs
+Players learn optimization by controlling game objects instead of reading only theory.
 
-## MVP pages
+The main game, Optimizer Dojo, visualizes Gradient Descent on interactive loss functions. Players choose a learning rate and observe weight updates, gradients, loss, convergence, and divergence.
 
-- Home
-- Profile
-- Challenge Listing
-- Challenge Description
-- Drag & Drop Builder
-- Simulation
-- Score Result
+The Physics Optimizer visualizes a 22-weight model as a side-view launch. Two important weights control the visible motion while the remaining weights update in the background. Players can switch learning-rate schedules during a run and compare their paths.
 
-## Next
+## Learning Topics
 
-1. Initialize the frontend app inside `frontend/`
-2. Initialize the FastAPI app inside `backend/`
-3. Start with one challenge flow end-to-end
+- Gradient Descent
+- Learning-rate selection
+- Weight and gradient updates
+- Convergence and divergence
+- Decay schedules
+- Non-convex optimization challenges
+
+## Project Structure
+
+- `frontend/` - React, p5.js, and interactive game experiences
+- `backend/` - FastAPI validation and challenge services
+- `content/` - Challenge definitions
+- `docs/` - Project documentation
+
+## Running Locally
+
+```bash
+cd frontend
+npm install
+npm run dev
+```

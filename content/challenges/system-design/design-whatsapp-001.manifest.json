@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "id": "design-whatsapp-001",
+  "category": "system-design",
+  "title": "Design WhatsApp for 100M users",
+  "difficulty": "Medium",
+  "rewardXp": 150,
+  "estimatedTime": "8 min",
+  "summary": "Build a resilient messaging backend with reliable delivery, real-time sync, and graceful scale.",
+  "objectives": ["Create a low-latency message path", "Handle burst traffic safely", "Support delivery confirmation"],
+  "supportedComponents": ["Client", "API Gateway", "Chat Service", "Queue", "Database", "Notification Service"],
+  "hint": "Think about what protects delivery during traffic spikes.",
+  "scoringDimensions": [{"label": "Architecture correctness", "weight": 70}, {"label": "Resilience", "weight": 30}],
+  "validationRules": {"requiredCore": ["Client", "API Gateway", "Chat Service", "Queue", "Database", "Notification Service"], "singlePipeline": true},
+  "surface": "builder",
+  "gameModeId": "system-design-builder",
+  "allowedNodeTypeIds": ["client", "api-gateway", "chat-service", "queue", "database", "notification-service"],
+  "maxNodes": 9,
+  "timeLimitSeconds": 480
+}

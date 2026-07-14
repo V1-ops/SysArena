@@ -30,6 +30,8 @@ export interface Challenge extends ChallengeSummary {
   outcome: string;
   workflow: string[];
   tags: string[];
+  surface?: "builder" | "optimizer" | string;
+  gameModeId?: string;
 }
 
 export interface ChallengeDetail extends Challenge {
